@@ -7,6 +7,7 @@ from typing import Any
 
 import config
 from src.agenda.scheduler import sugerir_horarios
+from src.crm.cliente import sincronizar as sincronizar_crm
 from src.imoveis.catalogo import buscar, formatar_imovel
 from src.memoria import conversa as memoria
 from src.qualificacao.extracao_llm import extrair_perfil_llm, mesclar_perfil
@@ -196,6 +197,8 @@ def processar_mensagem(lead_id: str, mensagem: str) -> dict[str, Any]:
     resposta = resposta_llm or _resposta_deterministica(mensagem, estado, qual, sugestoes)
 
     memoria.adicionar_mensagem(estado, "agente", resposta)
+    resumo = montar_resumo(estado)
+    crm = sincronizar_crm(estado, resumo)  # só envia se a prioridade/estado mudou
     path = memoria.salvar(estado)
 
     return {
@@ -205,8 +208,9 @@ def processar_mensagem(lead_id: str, mensagem: str) -> dict[str, Any]:
         "qualificacao": qual,
         "imoveis": sugestoes,
         "conversa_path": str(path),
-        "resumo_corretor": montar_resumo(estado),
+        "resumo_corretor": resumo,
         "usou_llm": usou_llm,
+        "crm": crm,
     }
 
 

@@ -1,7 +1,8 @@
-# Qualificação de leads e resumo para corretores
+# Qualificação de leads, resumo para corretores e integração com CRM
 
-Responsável: Letícia. Módulos: `src/qualificacao/` e `src/resumo/`.
-Requisitos atendidos: "Qualificação de leads" e "Resumo inteligente" (enunciado Fase 5).
+Responsável: Letícia.
+Módulos: `src/qualificacao/`, `src/resumo/` e `src/crm/`.
+Requisitos atendidos: "Qualificação de leads" e "Resumo inteligente". Diferencial: "Integração com CRM".
 
 ## 1. Qualificação (`src/qualificacao/lead.py`)
 
@@ -56,21 +57,62 @@ agendamentos e últimas mensagens.
   resumo a cada mensagem e não faz sentido pagar uma chamada de LLM por turno. A
   CLI (`--resumo`, `--demo`) liga o LLM na hora da entrega.
 - **Exportação:** `dados/saidas/resumo_<lead>.md` (para humanos) e `.json`
-  (pronto para CRM/webhook, um dos diferenciais do enunciado).
+  (estruturado, o mesmo payload enviado ao CRM; veja a seção 3).
 
-## 3. Como rodar
+## 3. Integração com CRM (`src/crm/`)
+
+**O que é:** o agente envia o lead ao CRM por **webhook HTTP (POST JSON)**. Para a
+POC, o CRM é simulado em FastAPI (`src/crm/servidor_mock.py`), assim como a base
+de imóveis. A integração em si é real: requisição HTTP, autenticação por token,
+resposta e persistência no lado do CRM. Para usar um CRM de verdade (ou
+n8n/Zapier), basta trocar `CRM_WEBHOOK_URL`.
+
+**Quando envia (por evento, não a cada mensagem):**
+
+| Evento | Quando |
+|--------|--------|
+| `lead_atualizado` | A prioridade do lead mudou (ex.: frio → quente) |
+| `lead_qualificado` | O lead ficou pronto para agendar |
+| `resumo_gerado` | O resumo foi gerado para o corretor (`--resumo` / `--demo`) |
+
+Leads sem intenção identificada não são enviados, porque ainda não há o que
+qualificar.
+
+**Decisões de arquitetura:**
+- **Adapter:** o agente depende de `CRMAdapter`, não de um fornecedor.
+  `WebhookCRM` é a implementação atual. Um `HubSpotCRM` seria outra classe com o
+  mesmo método `enviar`.
+- **Resiliência:** falha de rede nunca derruba o atendimento. O evento vai para
+  `dados/crm_pendentes.jsonl` e é reenviado com `python main.py --crm-reenviar`.
+- **Idempotência:** o CRM faz upsert por `lead_id` e guarda o histórico de
+  eventos, então reenvios não duplicam leads.
+- **Segurança:** o token vem do `.env` (`CRM_WEBHOOK_TOKEN`) e é enviado como
+  `Authorization: Bearer`. O CRM simulado recusa com 401 se o token não bater.
+
+**CRM simulado:** `GET /` (painel HTML que atualiza sozinho, ordenado por score),
+`GET /leads`, `GET /leads/{id}` e `POST /webhook/leads`.
+
+## 4. Como rodar
 
 ```bash
 pip install -r requirements.txt
-python -m pytest -q                 # 17 testes, sem rede e sem LLM
-python main.py --demo               # 3 cenários + resumo do LEAD-001
-python main.py --resumo LEAD-001    # resumo de um lead específico
+cp .env.example .env
+python -m pytest -q                 # 24 testes, sem internet e sem LLM
+
+# terminal 1: CRM simulado -> abra http://127.0.0.1:8001
+python main.py --crm-servidor
+
+# terminal 2: agente
+python main.py --demo               # 3 cenários; leads chegam no painel do CRM
+python main.py --resumo LEAD-001    # resumo + evento resumo_gerado no CRM
+python main.py --crm-reenviar       # reenvia eventos que falharam
 ```
 
-## 4. Integração com o restante do projeto
+## 5. Integração com o restante do projeto
 
 - `score_lead(perfil)` mantém as chaves originais (`score`, `prioridade`,
   `campos_faltantes`, `pronto_para_agendar`) e adiciona `criterios`,
   `justificativa` e `encaminhamento`.
 - `score_estado(estado)` inclui o engajamento e é usado em `sdr.py` e no dashboard.
 - `montar_resumo(estado)` mantém as chaves antigas e adiciona novas.
+- `processar_mensagem` devolve a chave `crm` com o status do envio (`None` quando não houve evento).
