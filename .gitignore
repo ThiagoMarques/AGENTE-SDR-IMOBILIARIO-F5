@@ -1,0 +1,11 @@
+.venv/
+.cursor/
+__pycache__/
+*.py[cod]
+.env
+.DS_Store
+.ipynb_checkpoints/
+dados/
+faiss_index/
+*.log
+.pytest_cache/

@@ -1,0 +1,65 @@
+Arquitetura — Agente SDR Imobiliário (POC Fase 5)
+=================================================
+
+Visão
+-----
+Prova de conceito de um SDR imobiliário com IA generativa. O agente atende
+leads, qualifica intenção (compra / aluguel / investimento), consulta imóveis
+em uma API fake pública, agenda reuniões e gera resumo para o corretor
+(human-in-the-loop).
+
+Fonte de imóveis
+----------------
+Fake API for Devs — Real Estate (sem autenticação):
+  https://fakeapifordevs.vercel.app/docs/realestate
+  GET /api/realestate/listings
+
+Componentes
+-----------
+1) Interface CLI (main.py)
+   Entrada dos cenários, chat e dashboard mínimo.
+
+2) src/agente
+   Orquestra a conversa: extrai sinais, atualiza perfil, busca imóveis,
+   responde (LLM se houver OPENAI_API_KEY; senão fluxo determinístico).
+
+3) src/qualificacao
+   Score e prioridade (quente / morno / frio), campos faltantes e próxima
+   pergunta do funil.
+
+4) src/imoveis
+   Cliente HTTP da Fake Real Estate API + normalização dos anúncios.
+
+5) src/memoria
+   Histórico e perfil por lead em dados/conversas/*.json (pasta local,
+   criada em runtime, fora do Git).
+
+6) src/agenda
+   Sugestão de horários e registro de reunião/visita.
+
+7) src/resumo
+   Pacote para o corretor: perfil, score, imóveis, ação sugerida.
+
+8) src/dashboard
+   Agregados simples sobre conversas salvas.
+
+Fluxo
+-----
+Lead -> mensagem -> memória/perfil -> qualificação -> API de imóveis
+     -> resposta (LLM ou regras) -> (opcional) agendamento
+     -> resumo para corretor / dashboard
+
+Diferenciais previstos (roadmap)
+--------------------------------
+- RAG sobre FAQs da imobiliária
+- Canal WhatsApp
+- Multiagentes (qualificador, buscador, agendador)
+- Voice AI (Azure Speech)
+- CRM / webhooks
+- Observabilidade e deploy em cloud
+
+Segurança e privacidade (Fase 5)
+--------------------------------
+- Credenciais só em .env (não versionado)
+- Catálogo via API fake (dados sintéticos)
+- Resumo para humano decidir; o agente não fecha contrato sozinho
