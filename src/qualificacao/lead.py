@@ -1,75 +1,210 @@
-"""Qualificação de leads (regras didáticas + score)."""
+"""Qualificação de leads: score ponderado e explicável (inspirado em BANT).
+
+Por que ponderado e não "% de campos preenchidos"?
+- Um SDR real prioriza pelo que indica chance de fechamento: intenção clara,
+  orçamento, prazo e engajamento. Preencher "quartos" não pesa o mesmo que
+  informar orçamento ou urgência.
+- Cada critério gera uma justificativa legível, para o corretor entender
+  POR QUE o lead é quente/morno/frio (IA explicável / human-in-the-loop).
+
+Critérios (pontos máximos):
+- necessidade  (20): intenção identificada (compra, aluguel, investimento)
+- detalhamento (25): campos específicos do perfil (região/quartos ou retorno/perfil)
+- orcamento    (20): faixa de preço ou ticket informado
+- prazo        (20): urgência (alta 20, média 12, baixa 4, desconhecida 0)
+- engajamento  (15): nº de mensagens do lead (1 -> 5, 2 -> 10, 3+ -> 15)
+
+Se o nº de mensagens não for informado, o engajamento sai da conta e o score
+é reescalado para 0–100 sobre os critérios disponíveis.
+"""
 from __future__ import annotations
 
 from typing import Any
 
 import config
 
-
 CAMPOS_COMPRA = ("intencao", "regiao", "quartos", "faixa_preco", "urgencia")
+CAMPOS_ALUGUEL = CAMPOS_COMPRA
 CAMPOS_INVESTIMENTO = ("intencao", "ticket", "retorno_esperado", "perfil")
-CAMPOS_ALUGUEL = ("intencao", "regiao", "quartos", "faixa_preco", "urgencia")
+
+PESOS = {
+    "necessidade": 20,
+    "detalhamento": 25,
+    "orcamento": 20,
+    "prazo": 20,
+    "engajamento": 15,
+}
+
+URGENCIA_PONTOS = {
+    "alta": 20, "urgente": 20, "imediata": 20, "agora": 20,
+    "media": 12, "média": 12, "medio prazo": 12, "médio prazo": 12,
+    "baixa": 4, "sem pressa": 4,
+}
+
+NOMES_CAMPOS = {
+    "regiao": "região", "quartos": "quartos",
+    "retorno_esperado": "retorno esperado", "perfil": "perfil de investidor",
+}
+
+PERGUNTAS = {
+    "intencao": "Pra eu te ajudar melhor: você está pensando em comprar, alugar ou investir?",
+    "regiao": "Tem alguma região ou bairro que você prefere?",
+    "quartos": "Quantos quartos você precisa?",
+    "faixa_preco": "E qual faixa de valor cabe no seu orçamento?",
+    "urgencia": "Você tem um prazo em mente? É algo para agora, médio prazo ou sem pressa?",
+    "ticket": "Qual valor aproximado você pensa em investir?",
+    "retorno_esperado": "Que retorno anual você espera, mais ou menos (por exemplo, 6% a.a.)?",
+    "perfil": "Você prefere renda recorrente com locação ou valorização no médio prazo?",
+}
+
+
+def _intencao(perfil: dict[str, Any]) -> str:
+    i = (perfil.get("intencao") or "").lower()
+    if i in {"investimento", "investir"}:
+        return "investimento"
+    if i in {"aluguel", "alugar"}:
+        return "aluguel"
+    if i in {"compra", "comprar"}:
+        return "compra"
+    return ""
+
+
+def _campos_base(perfil: dict[str, Any]) -> tuple[str, ...]:
+    i = _intencao(perfil)
+    if i == "investimento":
+        return CAMPOS_INVESTIMENTO
+    if i == "aluguel":
+        return CAMPOS_ALUGUEL
+    return CAMPOS_COMPRA
 
 
 def campos_faltantes(perfil: dict[str, Any]) -> list[str]:
-    intencao = (perfil.get("intencao") or "").lower()
-    if intencao in {"investimento", "investir"}:
-        base = CAMPOS_INVESTIMENTO
-    elif intencao in {"aluguel", "alugar"}:
-        base = CAMPOS_ALUGUEL
-    else:
-        base = CAMPOS_COMPRA
-    return [c for c in base if not perfil.get(c)]
+    return [c for c in _campos_base(perfil) if not perfil.get(c)]
 
 
-def score_lead(perfil: dict[str, Any]) -> dict[str, Any]:
-    """Score 0–100 com prioridade quente/morno/frio."""
-    faltantes = campos_faltantes(perfil)
-    preenchidos = 0
-    intencao = (perfil.get("intencao") or "").lower()
-    if intencao in {"investimento", "investir"}:
-        total = len(CAMPOS_INVESTIMENTO)
-    elif intencao in {"aluguel", "alugar"}:
-        total = len(CAMPOS_ALUGUEL)
-    else:
-        total = len(CAMPOS_COMPRA)
+def _campos_detalhe(perfil: dict[str, Any]) -> tuple[str, ...]:
+    if _intencao(perfil) == "investimento":
+        return ("retorno_esperado", "perfil")
+    return ("regiao", "quartos")
 
-    preenchidos = total - len(faltantes)
-    base = int(100 * (preenchidos / total)) if total else 0
 
-    urgencia = str(perfil.get("urgencia") or "").lower()
-    if urgencia in {"alta", "urgente", "imediata", "agora"}:
-        base = min(100, base + 15)
-    elif urgencia in {"baixa", "sem pressa"}:
-        base = max(0, base - 10)
+def _nivel_engajamento(mensagens_lead: int) -> int:
+    if mensagens_lead >= 3:
+        return 15
+    if mensagens_lead == 2:
+        return 10
+    if mensagens_lead == 1:
+        return 5
+    return 0
 
-    if base >= config.SCORE_QUENTE:
+
+def avaliar_criterios(perfil: dict[str, Any], mensagens_lead: int | None = None) -> list[dict[str, Any]]:
+    """Retorna a pontuação de cada critério com justificativa."""
+    intencao = _intencao(perfil)
+    criterios: list[dict[str, Any]] = []
+
+    criterios.append({
+        "criterio": "necessidade",
+        "pontos": PESOS["necessidade"] if intencao else 0,
+        "maximo": PESOS["necessidade"],
+        "motivo": f"Intenção identificada: {intencao}." if intencao else "Intenção ainda não identificada.",
+    })
+
+    detalhes = _campos_detalhe(perfil)
+    preenchidos = [c for c in detalhes if perfil.get(c)]
+    pts = round(PESOS["detalhamento"] * len(preenchidos) / len(detalhes))
+    criterios.append({
+        "criterio": "detalhamento",
+        "pontos": pts,
+        "maximo": PESOS["detalhamento"],
+        "motivo": (
+            f"Informou {', '.join(NOMES_CAMPOS[c] for c in preenchidos)}." if preenchidos
+            else "Sem detalhes do imóvel/objetivo."
+        ) + (
+            f" Falta: {', '.join(NOMES_CAMPOS[c] for c in detalhes if c not in preenchidos)}."
+            if len(preenchidos) < len(detalhes) else ""
+        ),
+    })
+
+    campo_orc = "ticket" if intencao == "investimento" else "faixa_preco"
+    valor = perfil.get(campo_orc) or perfil.get("faixa_preco") or perfil.get("ticket")
+    criterios.append({
+        "criterio": "orcamento",
+        "pontos": PESOS["orcamento"] if valor else 0,
+        "maximo": PESOS["orcamento"],
+        "motivo": f"Orçamento informado: {formatar_valor(valor)}." if valor else "Orçamento não informado.",
+    })
+
+    urg = str(perfil.get("urgencia") or "").lower()
+    pts_urg = URGENCIA_PONTOS.get(urg, 0)
+    criterios.append({
+        "criterio": "prazo",
+        "pontos": pts_urg,
+        "maximo": PESOS["prazo"],
+        "motivo": f"Urgência {urg}." if urg else "Prazo não informado.",
+    })
+
+    if mensagens_lead is not None:
+        criterios.append({
+            "criterio": "engajamento",
+            "pontos": _nivel_engajamento(mensagens_lead),
+            "maximo": PESOS["engajamento"],
+            "motivo": f"{mensagens_lead} mensagem(ns) enviada(s) pelo lead.",
+        })
+    return criterios
+
+
+def formatar_valor(valor: Any) -> str:
+    try:
+        return f"{float(valor):,.0f}".replace(",", ".")
+    except (TypeError, ValueError):
+        return str(valor)
+
+
+def encaminhamento(perfil: dict[str, Any]) -> str:
+    """Quem deve assumir o lead (enunciado: investidor vai para especialista)."""
+    return "especialista em investimentos" if _intencao(perfil) == "investimento" else "corretor"
+
+
+def score_lead(perfil: dict[str, Any], mensagens_lead: int | None = None) -> dict[str, Any]:
+    """Score 0–100 ponderado, prioridade quente/morno/frio e justificativas.
+
+    Mantém as chaves originais (score, prioridade, campos_faltantes,
+    pronto_para_agendar) para não quebrar agente e dashboard.
+    """
+    criterios = avaliar_criterios(perfil, mensagens_lead)
+    obtido = sum(c["pontos"] for c in criterios)
+    maximo = sum(c["maximo"] for c in criterios)
+    score = round(100 * obtido / maximo) if maximo else 0
+
+    if score >= config.SCORE_QUENTE:
         prioridade = "quente"
-    elif base >= config.SCORE_MORNO:
+    elif score >= config.SCORE_MORNO:
         prioridade = "morno"
     else:
         prioridade = "frio"
 
+    faltantes = campos_faltantes(perfil)
     return {
-        "score": base,
+        "score": score,
         "prioridade": prioridade,
         "campos_faltantes": faltantes,
-        "pronto_para_agendar": len(faltantes) == 0 and base >= config.SCORE_MORNO,
+        "pronto_para_agendar": not faltantes and score >= config.SCORE_MORNO,
+        "encaminhamento": encaminhamento(perfil),
+        "criterios": criterios,
+        "justificativa": " ".join(c["motivo"] for c in criterios),
     }
+
+
+def score_estado(estado: dict[str, Any]) -> dict[str, Any]:
+    """Atalho: score a partir do estado da conversa (usa engajamento)."""
+    msgs = estado.get("mensagens") or []
+    n_lead = sum(1 for m in msgs if m.get("papel") == "lead")
+    return score_lead(estado.get("perfil") or {}, mensagens_lead=n_lead)
 
 
 def proxima_pergunta(perfil: dict[str, Any]) -> str | None:
     faltantes = campos_faltantes(perfil)
     if not faltantes:
         return None
-    perguntas = {
-        "intencao": "Você busca comprar, alugar ou investir?",
-        "regiao": "Qual região ou bairro tem mais interesse?",
-        "quartos": "Quantos quartos você precisa?",
-        "faixa_preco": "Qual faixa de preço cabe no seu orçamento?",
-        "urgencia": "Até quando você gostaria de concluir (curto, médio ou sem pressa)?",
-        "ticket": "Qual ticket aproximado você pensa investir?",
-        "retorno_esperado": "Que retorno anual você espera (por exemplo, 6% a.a.)?",
-        "perfil": "Prefere renda recorrente (locação) ou valorização no médio prazo?",
-    }
-    return perguntas.get(faltantes[0], "Pode me contar um pouco mais sobre o que procura?")
+    return PERGUNTAS.get(faltantes[0], "Pode me contar um pouco mais sobre o que procura?")

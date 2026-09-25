@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import config
-from src.qualificacao.lead import score_lead
+from src.qualificacao.lead import score_estado
 
 
 def carregar_conversas() -> list[dict[str, Any]]:
@@ -23,7 +23,7 @@ def montar_dashboard() -> dict[str, Any]:
     por_prioridade = {"quente": 0, "morno": 0, "frio": 0}
     agendamentos = 0
     for c in conversas:
-        q = score_lead(c.get("perfil") or {})
+        q = score_estado(c)
         por_prioridade[q["prioridade"]] = por_prioridade.get(q["prioridade"], 0) + 1
         agendamentos += len(c.get("agendamentos") or [])
     return {
@@ -33,8 +33,8 @@ def montar_dashboard() -> dict[str, Any]:
         "leads": [
             {
                 "lead_id": c.get("lead_id"),
-                "score": score_lead(c.get("perfil") or {})["score"],
-                "prioridade": score_lead(c.get("perfil") or {})["prioridade"],
+                "score": score_estado(c)["score"],
+                "prioridade": score_estado(c)["prioridade"],
                 "mensagens": len(c.get("mensagens") or []),
             }
             for c in conversas

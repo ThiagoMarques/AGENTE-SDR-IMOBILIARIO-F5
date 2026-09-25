@@ -58,7 +58,7 @@ def cmd_chat(lead_id: str, mensagem: str) -> None:
 def cmd_demo() -> None:
     """Roda os 3 cenários do enunciado (compra, investimento, follow-up)."""
     from src.agente.sdr import follow_up, processar_mensagem
-    from src.resumo.corretor import formatar_resumo_txt, montar_resumo
+    from src.resumo.corretor import exportar_resumo, formatar_resumo_txt, montar_resumo
     from src.memoria import conversa as memoria
 
     print("=== Cenário 1 — Compra ===\n")
@@ -86,9 +86,10 @@ def cmd_demo() -> None:
 
     print("=== Resumo para corretor (LEAD-001) ===\n")
     estado = memoria.carregar("LEAD-001")
-    resumo = montar_resumo(estado)
+    resumo = montar_resumo(estado, usar_llm=True)
     texto = formatar_resumo_txt(resumo)
     print(texto)
+    exportar_resumo(resumo)
 
     config.SAIDAS_DIR.mkdir(parents=True, exist_ok=True)
     out = config.SAIDAS_DIR / "demo_cenarios.json"
@@ -120,15 +121,13 @@ def cmd_dashboard() -> None:
 
 def cmd_resumo(lead_id: str) -> None:
     from src.memoria import conversa as memoria
-    from src.resumo.corretor import formatar_resumo_txt, montar_resumo
+    from src.resumo.corretor import exportar_resumo, formatar_resumo_txt, montar_resumo
 
     estado = memoria.carregar(lead_id)
-    texto = formatar_resumo_txt(montar_resumo(estado))
-    print(texto)
-    path = config.SAIDAS_DIR / f"resumo_{lead_id}.txt"
-    config.SAIDAS_DIR.mkdir(parents=True, exist_ok=True)
-    path.write_text(texto, encoding="utf-8")
-    print(f"\nSalvo em {path}")
+    resumo = montar_resumo(estado, usar_llm=True)
+    print(formatar_resumo_txt(resumo))
+    paths = exportar_resumo(resumo)
+    print(f"\nSalvo em {paths['md']} e {paths['json']}")
 
 
 def main() -> None:

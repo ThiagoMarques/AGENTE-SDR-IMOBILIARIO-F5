@@ -9,7 +9,8 @@ import config
 from src.agenda.scheduler import sugerir_horarios
 from src.imoveis.catalogo import buscar, formatar_imovel
 from src.memoria import conversa as memoria
-from src.qualificacao.lead import proxima_pergunta, score_lead
+from src.qualificacao.extracao_llm import extrair_perfil_llm, mesclar_perfil
+from src.qualificacao.lead import proxima_pergunta, score_estado
 from src.resumo.corretor import montar_resumo
 
 
@@ -173,8 +174,12 @@ def processar_mensagem(lead_id: str, mensagem: str) -> dict[str, Any]:
     memoria.adicionar_mensagem(estado, "lead", mensagem)
 
     perfil = extrair_sinais(mensagem, estado.get("perfil") or {})
+    # LLM complementa as regras (se houver OPENAI_API_KEY); nunca sobrescreve.
+    perfil = mesclar_perfil(
+        perfil, extrair_perfil_llm(mensagem, perfil, estado.get("mensagens"))
+    )
     estado["perfil"] = perfil
-    qual = score_lead(perfil)
+    qual = score_estado(estado)
 
     preco_max = perfil.get("faixa_preco") or perfil.get("ticket")
     quartos = perfil.get("quartos")
@@ -209,7 +214,7 @@ def follow_up(lead_id: str) -> dict[str, Any]:
     """Retoma conversa parada mantendo contexto (cenário 3 do desafio)."""
     estado = memoria.carregar(lead_id)
     perfil = estado.get("perfil") or {}
-    qual = score_lead(perfil)
+    qual = score_estado(estado)
     pergunta = proxima_pergunta(perfil)
     if estado.get("mensagens"):
         texto = (
