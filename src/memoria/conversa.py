@@ -1,41 +1,39 @@
-"""Memória conversacional persistida em JSON (POC)."""
+"""Memória conversacional persistida no PostgreSQL."""
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
-import config
+from src.db import repos
+from src.db.session import init_db, session_scope
 
 
-def _path(lead_id: str) -> Path:
-    config.CONVERSAS_DIR.mkdir(parents=True, exist_ok=True)
-    safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in lead_id)
-    return config.CONVERSAS_DIR / f"{safe}.json"
+def _ensure_db() -> None:
+    init_db()
 
 
 def carregar(lead_id: str) -> dict[str, Any]:
-    path = _path(lead_id)
-    if not path.exists():
-        return {
-            "lead_id": lead_id,
-            "criado_em": datetime.now(timezone.utc).isoformat(),
-            "perfil": {},
-            "mensagens": [],
-            "agendamentos": [],
-            "imoveis_sugeridos": [],
-        }
-    with path.open(encoding="utf-8") as f:
-        return json.load(f)
+    _ensure_db()
+    session = session_scope()
+    try:
+        return repos.carregar(session, lead_id)
+    finally:
+        session.close()
 
 
-def salvar(estado: dict[str, Any]) -> Path:
-    path = _path(str(estado["lead_id"]))
-    estado["atualizado_em"] = datetime.now(timezone.utc).isoformat()
-    with path.open("w", encoding="utf-8") as f:
-        json.dump(estado, f, ensure_ascii=False, indent=2)
-    return path
+def salvar(estado: dict[str, Any]) -> str:
+    """Persiste o estado e devolve o lead_id (antes devolvia Path)."""
+    _ensure_db()
+    session = session_scope()
+    try:
+        lead_id = repos.salvar(session, estado)
+        session.commit()
+        return lead_id
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
 
 
 def adicionar_mensagem(estado: dict[str, Any], papel: str, texto: str) -> dict[str, Any]:
@@ -47,3 +45,12 @@ def adicionar_mensagem(estado: dict[str, Any], papel: str, texto: str) -> dict[s
         }
     )
     return estado
+
+
+def listar_todos() -> list[dict[str, Any]]:
+    _ensure_db()
+    session = session_scope()
+    try:
+        return repos.listar_leads(session)
+    finally:
+        session.close()

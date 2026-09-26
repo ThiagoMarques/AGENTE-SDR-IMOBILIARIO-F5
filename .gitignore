@@ -9,3 +9,6 @@ dados/
 faiss_index/
 *.log
 .pytest_cache/
+frontend/node_modules/
+frontend/dist/
+*.tsbuildinfo

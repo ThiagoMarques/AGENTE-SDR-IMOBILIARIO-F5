@@ -8,53 +8,81 @@ leads, qualifica intenção (compra / aluguel / investimento), consulta imóveis
 em uma API fake pública, agenda reuniões e gera resumo para o corretor
 (human-in-the-loop).
 
+Stack
+-----
+- Front: Vite + React + TypeScript (Chat + Dashboard)
+- API: FastAPI (Python) em api/app.py
+- Banco: PostgreSQL (Docker Compose) via SQLAlchemy
+- Imóveis: Fake Real Estate API (externa)
+- CLI: main.py (cenários do enunciado)
+
 Fonte de imóveis
 ----------------
-Fake API for Devs — Real Estate (sem autenticação):
+Padrão (IMOVEIS_SOURCE=br): catálogo sintético Brasil em BRL
+  (src/imoveis/catalogo_br.py) — regiões SP/DF alinhadas ao agente.
+Opcional (IMOVEIS_SOURCE=fake): Fake Real Estate API (EUA):
   https://fakeapifordevs.vercel.app/docs/realestate
   GET /api/realestate/listings
 
+Guardrails do chat
+------------------
+- Mensagens fora de escopo (clima, esportes, política etc.) não disparam
+  busca de imóveis nem poluem o perfil; o agente redireciona ao funil.
+- Cards de imóveis só aparecem com intenção + filtro (quartos ou preço).
+
 Componentes
 -----------
-1) Interface CLI (main.py)
-   Entrada dos cenários, chat e dashboard mínimo.
+1) frontend/
+   Chat do lead e dashboard do corretor (proxy /api -> :8000).
 
-2) src/agente
+2) api/app.py
+   REST: /chat, /leads, /dashboard, /health, /webhooks/canal (stub).
+
+3) src/agente
    Orquestra a conversa: extrai sinais, atualiza perfil, busca imóveis,
    responde (LLM se houver OPENAI_API_KEY; senão fluxo determinístico).
 
-3) src/qualificacao
-   Score e prioridade (quente / morno / frio), campos faltantes e próxima
-   pergunta do funil.
+4) src/qualificacao
+   Score e prioridade (quente / morno / frio).
 
-4) src/imoveis
-   Cliente HTTP da Fake Real Estate API + normalização dos anúncios.
+5) src/imoveis
+   Cliente HTTP da Fake Real Estate API + normalização.
 
-5) src/memoria
-   Histórico e perfil por lead em dados/conversas/*.json (pasta local,
-   criada em runtime, fora do Git).
+6) src/memoria + src/db
+   Persistência PostgreSQL (leads, mensagens, agendamentos, imoveis_sugeridos).
 
-6) src/agenda
-   Sugestão de horários e registro de reunião/visita.
-
-7) src/resumo
-   Pacote para o corretor: perfil, score, imóveis, ação sugerida.
-
-8) src/dashboard
-   Agregados simples sobre conversas salvas.
+7) src/agenda / src/resumo / src/dashboard
+   Horários, pacote do corretor e métricas.
 
 Fluxo
 -----
-Lead -> mensagem -> memória/perfil -> qualificação -> API de imóveis
-     -> resposta (LLM ou regras) -> (opcional) agendamento
-     -> resumo para corretor / dashboard
+Lead (React) -> POST /chat -> memória/perfil (Postgres) -> qualificação
+            -> API de imóveis -> resposta (LLM ou regras)
+            -> dashboard / resumo para corretor
+
+Subir a POC
+-----------
+1) docker compose up -d
+2) python -m venv .venv && source .venv/bin/activate
+3) pip install -r requirements.txt
+4) uvicorn api.app:app --reload --port 8000
+5) cd frontend && npm install && npm run dev
+   -> http://localhost:5173
+
+Variáveis (.env na raiz do projeto)
+----------------------------------
+DATABASE_URL=postgresql+psycopg://sdr:sdr@localhost:5432/sdr
+OPENAI_API_KEY=           # opcional
+LLM_MODEL=gpt-4o-mini
+IMOVEIS_API_BASE=https://fakeapifordevs.vercel.app/api/realestate
+CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 
 Diferenciais previstos (roadmap)
 --------------------------------
 - RAG sobre FAQs da imobiliária
-- Canal WhatsApp
+- Canal WhatsApp / Chatwoot (gancho em POST /webhooks/canal)
 - Multiagentes (qualificador, buscador, agendador)
-- Voice AI (Azure Speech)
+- Voice AI
 - CRM / webhooks
 - Observabilidade e deploy em cloud
 
