@@ -27,7 +27,7 @@ IMOVEIS_API_BASE = (
 ).rstrip("/")
 IMOVEIS_API_TIMEOUT = float(os.getenv("IMOVEIS_API_TIMEOUT") or "20")
 # br = catálogo sintético Brasil (padrão); fake = Fake Real Estate API (EUA)
-IMOVEIS_SOURCE = (os.getenv("IMOVEIS_SOURCE") or "fake").strip().lower()
+IMOVEIS_SOURCE = (os.getenv("IMOVEIS_SOURCE") or "br").strip().lower()
 
 OPENAI_API_KEY = (os.getenv("OPENAI_API_KEY") or "").strip()
 LLM_MODEL = (os.getenv("LLM_MODEL") or "gpt-4o-mini").strip()
