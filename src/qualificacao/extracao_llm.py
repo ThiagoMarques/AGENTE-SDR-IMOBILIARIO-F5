@@ -6,8 +6,10 @@ Por que usar LLM aqui?
   contexto da conversa e devolve JSON validado por um schema Pydantic.
 - As regras continuam como fallback: sem OPENAI_API_KEY ou em caso de erro,
   a função retorna None e o fluxo determinístico segue funcionando.
-- O LLM só PREENCHE campos que conseguiu inferir; ele nunca apaga o que as
-  regras ou mensagens anteriores já coletaram (merge conservador).
+- Merge com precedência do LLM: quando o LLM extrai um campo, o valor dele
+  vale sobre o da regex (a validação mostrou erros de regex como "1,5 milhão"
+  -> 1 e "minha renda" -> investimento, que um merge só-preenche-lacunas
+  preservaria). Campos que o LLM NÃO retornou nunca são apagados.
 """
 from __future__ import annotations
 
@@ -75,7 +77,12 @@ def extrair_perfil_llm(
 
 
 def mesclar_perfil(perfil_regras: dict[str, Any], extraido: dict[str, Any] | None) -> dict[str, Any]:
-    """Merge conservador: LLM preenche lacunas; objeções são acumuladas."""
+    """LLM tem precedência nos campos que extraiu; o resto é mantido.
+
+    O LLM recebe o perfil atual e o histórico, com temperature=0 e a instrução
+    de não inventar; nulos são descartados antes do merge, então ele corrige
+    valores mas não apaga informação. Objeções são acumuladas.
+    """
     if not extraido:
         return perfil_regras
     novo = dict(perfil_regras)
@@ -83,6 +90,6 @@ def mesclar_perfil(perfil_regras: dict[str, Any], extraido: dict[str, Any] | Non
         if campo == "objecoes":
             atuais = list(novo.get("objecoes") or [])
             novo["objecoes"] = atuais + [o for o in valor if o not in atuais]
-        elif not novo.get(campo):
+        else:
             novo[campo] = valor
     return novo

@@ -35,8 +35,11 @@ o cenário 2 do enunciado.
 - Com `OPENAI_API_KEY`, o LLM lê a mensagem no contexto das últimas mensagens e
   devolve JSON validado pelo schema Pydantic `PerfilExtraido`, com
   `temperature=0` e o prompt "não invente dados".
-- **Merge conservador:** o LLM só preenche lacunas e nunca sobrescreve o que as
-  regras já extraíram. Também acumula objeções citadas pelo cliente.
+- **Merge com precedência do LLM:** quando o LLM extrai um campo, o valor dele
+  vale sobre o da regex. Campos que ele não retornou nunca são apagados, e as
+  objeções são acumuladas. *Por quê:* a bateria de validação mostrou erros da
+  regex ("1,5 milhão" → 1, "minha renda" → investimento) que um merge só de
+  lacunas preservaria mesmo com LLM ligado.
 - **Fallback:** sem chave ou com erro, retorna `None` e o fluxo por regras segue.
 
 ## 2. Resumo para corretor (`src/resumo/corretor.py`)

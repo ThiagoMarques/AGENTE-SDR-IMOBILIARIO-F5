@@ -67,10 +67,19 @@ def test_llm_ausente_retorna_none():
     assert extrair_perfil_llm("quero comprar") is None
 
 
-def test_merge_nao_sobrescreve_regras_e_acumula_objecoes():
-    regras = {"intencao": "compra", "regiao": "moema", "objecoes": ["preço"]}
-    llm = {"intencao": "aluguel", "quartos": 3, "objecoes": ["preço", "financiamento"]}
+def test_merge_llm_corrige_regex_sem_apagar_e_acumula_objecoes():
+    # regex errou: "1,5 milhão" -> 1 e "minha renda" -> investimento
+    regras = {"intencao": "investimento", "regiao": "moema", "faixa_preco": 1.0, "objecoes": ["preço"]}
+    llm = {"intencao": "aluguel", "faixa_preco": 1500000, "quartos": 3,
+           "objecoes": ["preço", "financiamento"]}
     m = mesclar_perfil(regras, llm)
-    assert m["intencao"] == "compra"
+    assert m["intencao"] == "aluguel"
+    assert m["faixa_preco"] == 1500000
+    assert m["regiao"] == "moema"  # LLM não retornou: mantém
     assert m["quartos"] == 3
     assert m["objecoes"] == ["preço", "financiamento"]
+
+
+def test_merge_sem_llm_mantem_regras():
+    regras = {"intencao": "compra"}
+    assert mesclar_perfil(regras, None) == regras
