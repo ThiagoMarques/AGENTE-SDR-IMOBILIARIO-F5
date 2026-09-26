@@ -137,12 +137,15 @@ def avaliar_criterios(perfil: dict[str, Any], mensagens_lead: int | None = None)
 
     urg = str(perfil.get("urgencia") or "").lower()
     pts_urg = URGENCIA_PONTOS.get(urg, 0)
-    criterios.append({
-        "criterio": "prazo",
-        "pontos": pts_urg,
-        "maximo": PESOS["prazo"],
-        "motivo": f"Urgência {urg}." if urg else "Prazo não informado.",
-    })
+    # O funil do investidor (enunciado: perfil, ticket, retorno) não pergunta
+    # prazo; sem essa informação o critério sai da conta em vez de zerar.
+    if not (intencao == "investimento" and not urg):
+        criterios.append({
+            "criterio": "prazo",
+            "pontos": pts_urg,
+            "maximo": PESOS["prazo"],
+            "motivo": f"Urgência {urg}." if urg else "Prazo não informado.",
+        })
 
     if mensagens_lead is not None:
         criterios.append({

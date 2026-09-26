@@ -1,6 +1,7 @@
 import json
+from datetime import datetime, timedelta, timezone
 
-from src.resumo.corretor import exportar_resumo, formatar_resumo_txt, montar_resumo
+from src.resumo.corretor import _alerta_follow_up, exportar_resumo, formatar_resumo_txt, montar_resumo
 
 
 def _estado():
@@ -28,10 +29,50 @@ def test_resumo_tem_campos_essenciais_e_compatibilidade():
     assert r["gerado_por"] == "regras"
 
 
-def test_detecta_objecoes_e_follow_up():
+def test_detecta_objecoes():
     r = montar_resumo(_estado())
     assert {"preço", "custos fixos", "financiamento"} <= set(r["objecoes"])
-    assert any("aguardando resposta" in p for p in r["pontos_atencao"])
+
+
+def test_consultar_horarios_nao_e_decisao_compartilhada():
+    e = _estado()
+    e["mensagens"].append({"papel": "lead", "texto": "Posso consultar os horários de visita?"})
+    assert "decisão compartilhada" not in montar_resumo(e)["objecoes"]
+    e["mensagens"].append({"papel": "lead", "texto": "Preciso ver com minha esposa."})
+    assert "decisão compartilhada" in montar_resumo(e)["objecoes"]
+
+
+def test_conversa_ativa_nao_gera_alerta_de_follow_up():
+    agora = datetime.now(timezone.utc).isoformat()
+    msgs = [{"papel": "lead", "texto": "oi", "em": agora}, {"papel": "agente", "texto": "olá", "em": agora}]
+    assert _alerta_follow_up(msgs) is None
+
+
+def test_lead_que_nao_respondeu_follow_up_gera_alerta():
+    agora = datetime.now(timezone.utc).isoformat()
+    msgs = [{"papel": "lead", "texto": "oi", "em": agora},
+            {"papel": "agente", "texto": "olá", "em": agora},
+            {"papel": "agente", "texto": "retomando nossa conversa", "em": agora}]
+    assert "não respondeu ao follow-up" in _alerta_follow_up(msgs)
+
+
+def test_lead_em_silencio_ha_mais_de_24h_gera_alerta():
+    antes = (datetime.now(timezone.utc) - timedelta(hours=30)).isoformat()
+    msgs = [{"papel": "lead", "texto": "oi", "em": antes}, {"papel": "agente", "texto": "olá", "em": antes}]
+    assert "30h" in _alerta_follow_up(msgs)
+
+
+def test_sinopse_sem_intencao_e_legivel():
+    e = {"lead_id": "X", "perfil": {}, "mensagens": [{"papel": "lead", "texto": "oi"}]}
+    s = montar_resumo(e)["sinopse"]
+    assert s.startswith("Intenção ainda não identificada") and "interesse em intenção" not in s
+
+
+def test_investidor_nao_duplica_orcamento_e_ticket():
+    e = {"lead_id": "INV", "perfil": {"intencao": "investimento", "ticket": 400000, "faixa_preco": 400000,
+         "retorno_esperado": "6% a.a.", "perfil": "renda recorrente"}, "mensagens": []}
+    txt = formatar_resumo_txt(montar_resumo(e))
+    assert "- Ticket de investimento: 400.000" in txt and "- Orçamento: 400.000" not in txt
 
 
 def test_usar_llm_sem_chave_cai_para_regras():

@@ -130,6 +130,9 @@ def cmd_resumo(lead_id: str) -> None:
     from src.resumo.corretor import exportar_resumo, formatar_resumo_txt, montar_resumo
 
     estado = memoria.carregar(lead_id)
+    if not estado.get("mensagens"):
+        print(f"Lead {lead_id} não encontrado (nenhuma conversa salva).")
+        return
     from src.crm.cliente import EVENTO_RESUMO, sincronizar
 
     resumo = montar_resumo(estado, usar_llm=True)

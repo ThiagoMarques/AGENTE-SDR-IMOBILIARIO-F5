@@ -14,7 +14,7 @@ Duas camadas:
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -45,7 +45,10 @@ OBJECOES = {
     "localização": ("longe", "distante", "trânsito", "transito"),
     "custos fixos": ("condomínio", "condominio", "iptu"),
     "indecisão": ("vou pensar", "não sei", "nao sei", "talvez", "ainda não", "ainda nao"),
-    "decisão compartilhada": ("minha esposa", "meu marido", "minha família", "meu sócio", "consultar"),
+    "decisão compartilhada": (
+        "minha esposa", "meu marido", "minha família", "minha familia", "meu sócio", "meu socio",
+        "minha sócia", "minha socia", "meu esposo", "minha mulher",
+    ),
 }
 
 
@@ -73,18 +76,50 @@ def pontos_de_atencao(estado: dict[str, Any], qual: dict[str, Any]) -> list[str]
         pontos.append(f"Perfil investidor: direcionar para {qual['encaminhamento']}.")
     if perfil.get("intencao") and not estado.get("imoveis_sugeridos"):
         pontos.append("Nenhum imóvel do catálogo atende aos filtros: rever critérios com o cliente.")
-    if msgs and msgs[-1].get("papel") == "agente":
-        pontos.append("Última mensagem foi do agente: lead aguardando resposta (candidato a follow-up).")
+    alerta = _alerta_follow_up(msgs)
+    if alerta:
+        pontos.append(alerta)
     if qual["campos_faltantes"]:
         rot = [ROTULOS.get(c, c) for c in qual["campos_faltantes"]]
         pontos.append(f"Informações pendentes: {', '.join(rot)}.")
     return pontos
 
 
+HORAS_SEM_RESPOSTA = 24
+
+
+def _alerta_follow_up(msgs: list[dict[str, Any]], agora: datetime | None = None) -> str | None:
+    """Lead parado = não respondeu a um follow-up, ou está em silêncio há 24h+.
+
+    O agente sempre responde por último, então "última mensagem do agente"
+    sozinho não indica abandono.
+    """
+    if not msgs or msgs[-1].get("papel") != "agente":
+        return None
+    idx_lead = max((i for i, m in enumerate(msgs) if m.get("papel") == "lead"), default=-1)
+    sem_resposta = len(msgs) - 1 - idx_lead  # mensagens do agente após a última do lead
+    if sem_resposta >= 2:
+        return "Lead não respondeu ao follow-up: tentar outro canal ou contato humano."
+    if idx_lead >= 0:
+        try:
+            ultima = datetime.fromisoformat(msgs[idx_lead]["em"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        horas = ((agora or datetime.now(timezone.utc)) - ultima) / timedelta(hours=1)
+        if horas >= HORAS_SEM_RESPOSTA:
+            return f"Lead sem responder há {int(horas)}h: candidato a follow-up."
+    return None
+
+
 def sinopse_regras(estado: dict[str, Any], qual: dict[str, Any]) -> str:
     p = estado.get("perfil") or {}
-    intencao = p.get("intencao") or "intenção não definida"
-    partes = [f"Lead com interesse em {intencao}"]
+    if not p.get("intencao"):
+        n = sum(1 for m in estado.get("mensagens") or [] if m.get("papel") == "lead")
+        return (
+            f"Intenção ainda não identificada ({n} mensagem(ns) do lead). "
+            f"Classificado como {qual['prioridade']} (score {qual['score']})."
+        )
+    partes = [f"Lead com interesse em {p['intencao']}"]
     if p.get("regiao"):
         partes.append(f"na região {p['regiao']}")
     if p.get("quartos"):
@@ -225,6 +260,8 @@ def formatar_resumo_txt(resumo: dict[str, Any]) -> str:
         "## Perfil",
     ]
     campos = [c for c in ROTULOS if perfil.get(c)]
+    if "ticket" in campos and "faixa_preco" in campos and perfil["ticket"] == perfil["faixa_preco"]:
+        campos.remove("faixa_preco")
     linhas += [f"- {ROTULOS[c]}: {_valor_campo(c, perfil[c])}" for c in campos] or ["- (sem dados)"]
 
     linhas += ["", "## Por que essa prioridade"]

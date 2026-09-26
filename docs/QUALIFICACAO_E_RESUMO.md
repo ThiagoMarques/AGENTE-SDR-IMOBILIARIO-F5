@@ -100,7 +100,7 @@ qualificar.
 ```bash
 pip install -r requirements.txt
 cp .env.example .env
-python -m pytest -q                 # 24 testes, sem internet e sem LLM
+python -m pytest -q                 # testes sem internet e sem LLM
 
 # terminal 1: CRM simulado -> abra http://127.0.0.1:8001
 python main.py --crm-servidor

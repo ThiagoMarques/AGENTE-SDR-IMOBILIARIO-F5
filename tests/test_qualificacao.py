@@ -36,6 +36,16 @@ def test_urgencia_baixa_reduz_score():
     assert score_lead(base)["score"] < alta
 
 
+def test_investidor_sem_prazo_nao_e_penalizado():
+    # O funil do investidor não pergunta prazo: não pode travar o score em 80.
+    q = score_lead(INVESTIDOR, mensagens_lead=3)
+    assert q["score"] == 100
+    assert "prazo" not in {c["criterio"] for c in q["criterios"]}
+    com_prazo = score_lead({**INVESTIDOR, "urgencia": "baixa"}, mensagens_lead=3)
+    assert "prazo" in {c["criterio"] for c in com_prazo["criterios"]}
+    assert com_prazo["score"] < 100
+
+
 def test_investidor_vai_para_especialista():
     q = score_lead(INVESTIDOR)
     assert q["encaminhamento"] == "especialista em investimentos"
