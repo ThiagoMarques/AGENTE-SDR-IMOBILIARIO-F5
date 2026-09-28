@@ -104,3 +104,17 @@ def test_exporta_md_e_json(tmp_path):
     paths = exportar_resumo(montar_resumo(_estado()), tmp_path)
     assert paths["md"].read_text(encoding="utf-8").startswith("# Resumo")
     assert json.loads(paths["json"].read_text(encoding="utf-8"))["lead_id"] == "LEAD-T1"
+
+
+def test_dashboard_recalcula_em_vez_de_usar_valor_gravado(memoria_em_ram):
+    """Lista e detalhe precisam mostrar a mesma prioridade, mesmo com cache antigo no banco."""
+    from src.dashboard.metricas import montar_dashboard
+
+    memoria_em_ram["L-CACHE"] = {
+        "lead_id": "L-CACHE", "score": 75, "prioridade": "quente",  # gravado com a regra antiga
+        "perfil": {"intencao": "compra", "regiao": "zona sul", "quartos": 2, "urgencia": "alta"},
+        "mensagens": [{"papel": "lead", "texto": "a"}, {"papel": "lead", "texto": "b"}],
+        "agendamentos": [],
+    }
+    lead = montar_dashboard()["leads"][0]
+    assert lead["prioridade"] == montar_resumo(memoria_em_ram["L-CACHE"])["qualificacao"]["prioridade"] == "morno"
