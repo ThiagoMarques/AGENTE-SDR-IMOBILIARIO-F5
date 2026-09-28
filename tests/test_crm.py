@@ -105,3 +105,21 @@ def test_painel_html_lista_leads():
     c.post("/webhook/leads", json={"lead_id": "L1", "prioridade": "morno", "score": 50, "evento": "x"})
     r = c.get("/")
     assert r.status_code == 200 and "L1" in r.text and "morno" in r.text
+
+
+def test_agente_envia_eventos_ao_crm_sem_duplicar(servidor, monkeypatch):
+    """Fluxo real: processar_mensagem -> webhook -> CRM simulado (memória em RAM)."""
+    from src.agente.sdr import processar_mensagem
+
+    monkeypatch.setattr(config, "CRM_WEBHOOK_URL", f"{servidor}/webhook/leads")
+    r0 = processar_mensagem("L-E2E", "Oi, tudo bem?")
+    assert r0.get("crm") is None  # saudação: nada a enviar
+    r1 = processar_mensagem("L-E2E", "Quero comprar apartamento na zona sul.")
+    assert r1["crm"]["evento"] == cliente.EVENTO_ATUALIZADO  # intenção identificada
+    r2 = processar_mensagem("L-E2E", "2 quartos, até 500 mil, é urgente.")
+    assert r2["crm"]["evento"] == cliente.EVENTO_QUALIFICADO
+    r3 = processar_mensagem("L-E2E", "Obrigado!")
+    assert r3.get("crm") is None or r3["crm"]["evento"] == cliente.EVENTO_ATUALIZADO
+    eventos = [e["evento"] for e in TestClient(app).get("/leads/L-E2E").json()["eventos"]]
+    assert eventos.count(cliente.EVENTO_QUALIFICADO) == 1
+    assert len(TestClient(app).get("/leads").json()) == 1

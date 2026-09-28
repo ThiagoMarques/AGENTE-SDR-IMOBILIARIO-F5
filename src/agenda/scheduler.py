@@ -24,12 +24,10 @@ def registrar_agendamento(
     *,
     horario: str,
     tipo: str = "reuniao",
-    imovel_id: str | None = None,
 ) -> dict[str, Any]:
     item = {
         "tipo": tipo,
         "horario": horario,
-        "imovel_id": imovel_id,
         "status": "agendado",
     }
     estado.setdefault("agendamentos", []).append(item)

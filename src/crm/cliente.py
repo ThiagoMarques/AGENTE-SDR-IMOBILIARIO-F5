@@ -95,35 +95,53 @@ def enviar_evento(
         return {"status": "pendente", "evento": evento, "erro": str(exc)}
 
 
-def evento_necessario(estado: dict[str, Any], qual: dict[str, Any]) -> str | None:
-    """Decide se vale sincronizar agora, comparando com o último envio."""
-    ultimo = estado.get("crm") or {}
+def _tem_intencao(qual: dict[str, Any]) -> bool:
+    return any(c.get("criterio") == "necessidade" and c.get("pontos") for c in qual.get("criterios") or [])
+
+
+def _referencia(qual: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "prioridade": qual.get("prioridade"),
+        "pronto_para_agendar": bool(qual.get("pronto_para_agendar")),
+        "intencao_identificada": _tem_intencao(qual),
+    }
+
+
+def evento_necessario(ultimo: dict[str, Any], qual: dict[str, Any]) -> str | None:
+    """Compara a qualificação atual com a última referência conhecida."""
+    if not _tem_intencao(qual):
+        return None  # sem intenção ainda não há lead qualificável
     if qual.get("pronto_para_agendar") and not ultimo.get("pronto_para_agendar"):
         return EVENTO_QUALIFICADO
-    if (estado.get("perfil") or {}).get("intencao") and qual.get("prioridade") != ultimo.get("prioridade"):
+    if not ultimo.get("intencao_identificada") or qual.get("prioridade") != ultimo.get("prioridade"):
         return EVENTO_ATUALIZADO
     return None
 
 
 def sincronizar(
-    estado: dict[str, Any], resumo: dict[str, Any], evento: str | None = None,
+    estado: dict[str, Any],
+    resumo: dict[str, Any],
+    evento: str | None = None,
     adapter: CRMAdapter | None = None,
+    qual_antes: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
-    """Envia se houver evento relevante e registra o status em estado['crm']."""
+    """Envia ao CRM se houver evento relevante.
+
+    Referência para comparar: `qual_antes` (qualificação antes desta mensagem,
+    usada pelo agente, já que a memória em banco não guarda estado['crm']) ou,
+    na falta dele, o último envio registrado em estado['crm'].
+    """
     qual = resumo.get("qualificacao") or {}
-    evento = evento or evento_necessario(estado, qual)
+    if evento is None:
+        ultimo = _referencia(qual_antes) if qual_antes is not None else (estado.get("crm") or {})
+        evento = evento_necessario(ultimo, qual)
     if not evento:
         return None
     r = enviar_evento(evento, resumo, adapter)
     if r["status"] == "desabilitado":
         return r
-    estado["crm"] = {
-        "ultimo_evento": evento,
-        "status": r["status"],
-        "prioridade": qual.get("prioridade"),
-        "pronto_para_agendar": bool(qual.get("pronto_para_agendar")),
-        "em": datetime.now(timezone.utc).isoformat(),
-    }
+    estado["crm"] = {**_referencia(qual), "ultimo_evento": evento, "status": r["status"],
+                     "em": datetime.now(timezone.utc).isoformat()}
     return r
 
 

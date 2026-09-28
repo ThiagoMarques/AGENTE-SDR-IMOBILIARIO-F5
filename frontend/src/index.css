@@ -1,0 +1,55 @@
+@import "tailwindcss";
+@import "@heroui/styles";
+
+@theme {
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --color-navy: #0b1220;
+  --color-navy-2: #141c2e;
+  --color-mint: #e8f5ef;
+  --color-lime: #22c55e;
+  --color-lime-dark: #16a34a;
+}
+
+:root {
+  --accent: #22c55e;
+  --accent-foreground: #ffffff;
+  --background: #f4f7f5;
+  --foreground: #0f172a;
+  --success: #22c55e;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--foreground);
+  background:
+    radial-gradient(900px 500px at 0% 0%, #d8f3e4 0%, transparent 55%),
+    radial-gradient(800px 480px at 100% 10%, #e8eef8 0%, transparent 50%),
+    #eef2f0;
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+/* Bolhas estilo referência messaging */
+.bubble-agent {
+  background: #111827;
+  color: #f9fafb;
+  border-radius: 1.25rem 1.25rem 1.25rem 0.35rem;
+}
+
+.bubble-lead {
+  background: #ffffff;
+  color: #111827;
+  border: 1px solid #e5e7eb;
+  border-radius: 1.25rem 1.25rem 0.35rem 1.25rem;
+}

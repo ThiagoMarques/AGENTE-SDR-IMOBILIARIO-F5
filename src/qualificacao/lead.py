@@ -22,10 +22,26 @@ from __future__ import annotations
 from typing import Any
 
 import config
+from src.coleta.perfil import (  # funil e perguntas humanizadas (módulo de coleta)
+    CAMPOS_ALUGUEL,
+    CAMPOS_COMPRA,
+    CAMPOS_INVESTIMENTO,
+    campos_faltantes,
+    proxima_pergunta,
+)
 
-CAMPOS_COMPRA = ("intencao", "regiao", "quartos", "faixa_preco", "urgencia")
-CAMPOS_ALUGUEL = CAMPOS_COMPRA
-CAMPOS_INVESTIMENTO = ("intencao", "ticket", "retorno_esperado", "perfil")
+__all__ = [
+    "CAMPOS_ALUGUEL",
+    "CAMPOS_COMPRA",
+    "CAMPOS_INVESTIMENTO",
+    "campos_faltantes",
+    "proxima_pergunta",
+    "score_lead",
+    "score_estado",
+    "avaliar_criterios",
+    "encaminhamento",
+    "formatar_valor",
+]
 
 PESOS = {
     "necessidade": 20,
@@ -46,18 +62,6 @@ NOMES_CAMPOS = {
     "retorno_esperado": "retorno esperado", "perfil": "perfil de investidor",
 }
 
-PERGUNTAS = {
-    "intencao": "Pra eu te ajudar melhor: você está pensando em comprar, alugar ou investir?",
-    "regiao": "Tem alguma região ou bairro que você prefere?",
-    "quartos": "Quantos quartos você precisa?",
-    "faixa_preco": "E qual faixa de valor cabe no seu orçamento?",
-    "urgencia": "Você tem um prazo em mente? É algo para agora, médio prazo ou sem pressa?",
-    "ticket": "Qual valor aproximado você pensa em investir?",
-    "retorno_esperado": "Que retorno anual você espera, mais ou menos (por exemplo, 6% a.a.)?",
-    "perfil": "Você prefere renda recorrente com locação ou valorização no médio prazo?",
-}
-
-
 def _intencao(perfil: dict[str, Any]) -> str:
     i = (perfil.get("intencao") or "").lower()
     if i in {"investimento", "investir"}:
@@ -67,19 +71,6 @@ def _intencao(perfil: dict[str, Any]) -> str:
     if i in {"compra", "comprar"}:
         return "compra"
     return ""
-
-
-def _campos_base(perfil: dict[str, Any]) -> tuple[str, ...]:
-    i = _intencao(perfil)
-    if i == "investimento":
-        return CAMPOS_INVESTIMENTO
-    if i == "aluguel":
-        return CAMPOS_ALUGUEL
-    return CAMPOS_COMPRA
-
-
-def campos_faltantes(perfil: dict[str, Any]) -> list[str]:
-    return [c for c in _campos_base(perfil) if not perfil.get(c)]
 
 
 def _campos_detalhe(perfil: dict[str, Any]) -> tuple[str, ...]:
@@ -204,10 +195,3 @@ def score_estado(estado: dict[str, Any]) -> dict[str, Any]:
     msgs = estado.get("mensagens") or []
     n_lead = sum(1 for m in msgs if m.get("papel") == "lead")
     return score_lead(estado.get("perfil") or {}, mensagens_lead=n_lead)
-
-
-def proxima_pergunta(perfil: dict[str, Any]) -> str | None:
-    faltantes = campos_faltantes(perfil)
-    if not faltantes:
-        return None
-    return PERGUNTAS.get(faltantes[0], "Pode me contar um pouco mais sobre o que procura?")

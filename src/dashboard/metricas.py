@@ -1,42 +1,37 @@
-"""Dashboard mínimo: agrega leads/conversas salvas."""
+"""Dashboard mínimo: agrega leads no PostgreSQL."""
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from typing import Any
 
-import config
-from src.qualificacao.lead import score_estado
-
-
-def carregar_conversas() -> list[dict[str, Any]]:
-    config.CONVERSAS_DIR.mkdir(parents=True, exist_ok=True)
-    itens = []
-    for path in sorted(config.CONVERSAS_DIR.glob("*.json")):
-        with path.open(encoding="utf-8") as f:
-            itens.append(json.load(f))
-    return itens
+from src.memoria import conversa as memoria
+from src.qualificacao.lead import score_lead
 
 
 def montar_dashboard() -> dict[str, Any]:
-    conversas = carregar_conversas()
+    conversas = memoria.listar_todos()
     por_prioridade = {"quente": 0, "morno": 0, "frio": 0}
     agendamentos = 0
+    leads_out = []
     for c in conversas:
-        q = score_estado(c)
-        por_prioridade[q["prioridade"]] = por_prioridade.get(q["prioridade"], 0) + 1
+        perfil = c.get("perfil") or {}
+        q = score_lead(perfil)
+        prioridade = c.get("prioridade") or q["prioridade"]
+        score = c.get("score") if c.get("score") is not None else q["score"]
+        por_prioridade[prioridade] = por_prioridade.get(prioridade, 0) + 1
         agendamentos += len(c.get("agendamentos") or [])
+        leads_out.append(
+            {
+                "lead_id": c.get("lead_id"),
+                "score": score,
+                "prioridade": prioridade,
+                "mensagens": len(c.get("mensagens") or []),
+                "intencao": perfil.get("intencao"),
+                "atualizado_em": c.get("atualizado_em"),
+            }
+        )
     return {
         "total_conversas": len(conversas),
         "por_prioridade": por_prioridade,
         "agendamentos": agendamentos,
-        "leads": [
-            {
-                "lead_id": c.get("lead_id"),
-                "score": score_estado(c)["score"],
-                "prioridade": score_estado(c)["prioridade"],
-                "mensagens": len(c.get("mensagens") or []),
-            }
-            for c in conversas
-        ],
+        "leads": leads_out,
     }

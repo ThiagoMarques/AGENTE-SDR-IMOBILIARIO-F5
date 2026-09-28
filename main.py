@@ -16,10 +16,18 @@ def checar_ambiente() -> None:
 
     print("AGENTE-SDR-IMOBILIARIO — ambiente")
     print(f"  raiz: {config.ROOT}")
+    print(f"  database: {config.DATABASE_URL.split('@')[-1] if '@' in config.DATABASE_URL else config.DATABASE_URL}")
     print(f"  api_imoveis: {config.IMOVEIS_API_BASE}/listings")
     print(f"  LLM: {'configurado' if config.OPENAI_API_KEY else 'ausente (modo determinístico)'}")
     print(f"  modelo: {config.LLM_MODEL}")
     print(f"  CRM: {config.CRM_WEBHOOK_URL or 'desabilitado (defina CRM_WEBHOOK_URL)'}")
+    try:
+        from src.db.session import init_db
+
+        init_db()
+        print("  db_ok: True")
+    except Exception as exc:
+        print(f"  db_ok: False ({exc})")
     try:
         from src.imoveis.catalogo import buscar
 
@@ -52,7 +60,7 @@ def cmd_chat(lead_id: str, mensagem: str) -> None:
         "perfil": out["perfil"],
         "qualificacao": out["qualificacao"],
         "imoveis": [i["id"] for i in out["imoveis"]],
-        "conversa": out["conversa_path"],
+        "lead_id": out["lead_id"],
     }, ensure_ascii=False, indent=2))
 
 
@@ -108,7 +116,7 @@ def cmd_demo() -> None:
     # serialização segura (sem path objects)
     def _clean(obj):
         if isinstance(obj, dict):
-            return {k: _clean(v) for k, v in obj.items() if k != "conversa_path"}
+            return {k: _clean(v) for k, v in obj.items()}
         if isinstance(obj, list):
             return [_clean(x) for x in obj]
         return obj
