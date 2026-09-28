@@ -109,7 +109,7 @@ Mais detalhes em [`docs/ARQUITETURA.txt`](docs/ARQUITETURA.txt) e [`docs/QUALIFI
 | Prazo | 20 | Urgência alta 20, média 12, baixa 4 |
 | Engajamento | 15 | Mensagens do lead: 1 → 5, 2 → 10, 3+ → 15 |
 
-Prioridade: **quente** ≥ 70 · **morno** ≥ 40 · **frio** < 40. Investidores são encaminhados para o **especialista em investimentos**.
+Prioridade: **quente** ≥ 70 · **morno** ≥ 40 · **frio** < 40. **Sem orçamento informado, o lead fica no máximo morno**, porque quente significa contato humano imediato e o corretor precisa saber quanto o cliente pode pagar. Investidores são encaminhados para o **especialista em investimentos**.
 
 ## Estrutura do projeto
 

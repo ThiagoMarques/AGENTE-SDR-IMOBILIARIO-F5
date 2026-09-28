@@ -36,6 +36,23 @@ def test_urgencia_baixa_reduz_score():
     assert score_lead(base)["score"] < alta
 
 
+def test_sem_orcamento_nao_e_quente_mesmo_com_score_alto():
+    # Caso real da tela: intenção, região, quartos, urgência e 2 mensagens = 75
+    perfil = {"intencao": "compra", "regiao": "zona sul", "quartos": 2, "urgencia": "alta"}
+    q = score_lead(perfil, mensagens_lead=2)
+    assert q["score"] == 75
+    assert q["prioridade"] == "morno"
+    assert "exige orçamento" in q["justificativa"]
+    com_orcamento = score_lead({**perfil, "faixa_preco": 500000}, mensagens_lead=2)
+    assert com_orcamento["prioridade"] == "quente"
+
+
+def test_investidor_sem_ticket_nao_e_quente():
+    q = score_lead({"intencao": "investimento", "retorno_esperado": "6% a.a.",
+                    "perfil": "renda recorrente", "urgencia": "alta"}, mensagens_lead=3)
+    assert q["prioridade"] == "morno"
+
+
 def test_investidor_sem_prazo_nao_e_penalizado():
     # O funil do investidor não pergunta prazo: não pode travar o score em 80.
     q = score_lead(INVESTIDOR, mensagens_lead=3)

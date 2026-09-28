@@ -14,6 +14,9 @@ Critérios (pontos máximos):
 - prazo        (20): urgência (alta 20, média 12, baixa 4, desconhecida 0)
 - engajamento  (15): nº de mensagens do lead (1 -> 5, 2 -> 10, 3+ -> 15)
 
+Regra de corte: sem orçamento informado, a prioridade fica no máximo "morno"
+(quente = prioridade de contato humano, e o corretor precisa do orçamento).
+
 Se o nº de mensagens não for informado, o engajamento sai da conta e o score
 é reescalado para 0–100 sobre os critérios disponíveis.
 """
@@ -178,6 +181,14 @@ def score_lead(perfil: dict[str, Any], mensagens_lead: int | None = None) -> dic
     else:
         prioridade = "frio"
 
+    # Regra de negócio: sem orçamento não há lead quente. O score continua
+    # mostrando o engajamento, mas a prioridade fica no máximo "morno".
+    motivos = [c["motivo"] for c in criterios]
+    orcamento = next((c for c in criterios if c["criterio"] == "orcamento"), None)
+    if prioridade == "quente" and orcamento and not orcamento["pontos"]:
+        prioridade = "morno"
+        motivos.append("Prioridade limitada a morno: lead quente exige orçamento informado.")
+
     faltantes = campos_faltantes(perfil)
     return {
         "score": score,
@@ -186,7 +197,7 @@ def score_lead(perfil: dict[str, Any], mensagens_lead: int | None = None) -> dic
         "pronto_para_agendar": not faltantes and score >= config.SCORE_MORNO,
         "encaminhamento": encaminhamento(perfil),
         "criterios": criterios,
-        "justificativa": " ".join(c["motivo"] for c in criterios),
+        "justificativa": " ".join(motivos),
     }
 
 

@@ -17,6 +17,9 @@ Requisitos atendidos: "Qualificação de leads" e "Resumo inteligente". Diferenc
 | Engajamento   | 15 | Mensagens do lead: 1 → 5, 2 → 10, 3+ → 15 |
 
 Prioridade: **quente** ≥ 70, **morno** ≥ 40, **frio** < 40 (`config.py`).
+**Regra de corte:** sem orçamento (faixa de preço ou ticket), o lead fica no máximo
+**morno**, mesmo com score ≥ 70. Quente significa "chamar um humano agora", e o
+corretor precisa do orçamento para essa conversa render.
 
 **Por que ponderado?** A versão anterior media só o % de campos preenchidos, e
 informar "quartos" valia o mesmo que informar orçamento. Um SDR real prioriza
