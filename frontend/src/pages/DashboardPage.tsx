@@ -7,14 +7,15 @@ import {
   Spinner,
 } from "@heroui/react";
 import { useEffect, useState } from "react";
-import { api, Dashboard, Lead } from "../api";
+import { api, Dashboard, Lead, ResumoCorretor as ResumoTipo } from "../api";
 import { MetricCard } from "../components/MetricCard";
 import { PriorityChip } from "../components/PriorityChip";
+import { ResumoCorretor } from "../components/ResumoCorretor";
 
 export default function DashboardPage() {
   const [dash, setDash] = useState<Dashboard | null>(null);
   const [selecionado, setSelecionado] = useState<Lead | null>(null);
-  const [resumo, setResumo] = useState<Record<string, unknown> | null>(null);
+  const [resumo, setResumo] = useState<ResumoTipo | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -172,7 +173,7 @@ export default function DashboardPage() {
               {selecionado ? selecionado.lead_id : "Detalhe"}
             </Card.Title>
             <Card.Description>
-              {selecionado ? "Pacote para encaminhamento" : "Escolha um lead na lista"}
+              {selecionado ? "Resumo para o corretor" : "Escolha um lead na lista"}
             </Card.Description>
           </Card.Header>
           <Card.Content className="gap-4">
@@ -182,9 +183,10 @@ export default function DashboardPage() {
               </EmptyState>
             ) : (
               <>
-                <pre className="overflow-x-auto rounded-2xl bg-slate-50 p-3 text-xs leading-relaxed text-slate-700">
-                  {JSON.stringify(selecionado.perfil, null, 2)}
-                </pre>
+                {resumo && <ResumoCorretor resumo={resumo} />}
+                <h3 className="pt-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Últimas mensagens
+                </h3>
                 <ul className="space-y-2 text-sm">
                   {(selecionado.mensagens || []).slice(-6).map((m, i) => (
                     <li key={i} className="rounded-xl border border-slate-100 px-3 py-2">
@@ -193,12 +195,6 @@ export default function DashboardPage() {
                     </li>
                   ))}
                 </ul>
-                {resumo && (
-                  <div className="rounded-2xl bg-navy px-4 py-3 text-white">
-                    <p className="text-xs uppercase tracking-wide text-white/60">Ação sugerida</p>
-                    <p className="mt-1 text-sm font-medium">{String(resumo.acao_sugerida || "—")}</p>
-                  </div>
-                )}
               </>
             )}
           </Card.Content>

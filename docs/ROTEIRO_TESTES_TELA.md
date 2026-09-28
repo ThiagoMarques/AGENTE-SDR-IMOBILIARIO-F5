@@ -74,8 +74,17 @@ No `TESTE-03`: "Quem ganhou o jogo ontem?"
 ### T7 — Métricas e lista
 Ícone de quadradinhos na barra lateral.
 - Os contadores **Total / Quentes / Mornos / Frios** batem com os selos de cada lead. Depois de T1 a T9: 4 leads, sendo 3 quentes e 1 frio.
-- Ao clicar num lead, aparecem o perfil, as últimas mensagens e a **Ação sugerida**.
-- **Limitação conhecida:** o painel mostra só a ação sugerida. A sinopse, a justificativa do score, as objeções e os pontos de atenção vêm na API (`GET /leads/{id}/resumo`), mas ainda não aparecem na tela.
+- Ao clicar num lead, o painel **Resumo para o corretor** mostra:
+  - selo de prioridade, **score/100**, encaminhamento (corretor ou especialista) e o selo "pronto para agendar", quando for o caso;
+  - **Ação sugerida**;
+  - **Sinopse**;
+  - **Por que essa prioridade**: uma barra por critério com os pontos e o motivo;
+  - **Objeções do cliente** e **Pontos de atenção**;
+  - **Perfil** com rótulos e valores em R$ (não mais JSON cru);
+  - **Últimas mensagens**.
+- `TESTE-01` depois do T1 (antes do orçamento): aviso amarelo "Prioridade limitada a morno".
+- `TESTE-02`: encaminhamento para **especialista em investimentos**.
+- `TESTE-04`: objeções **preço**, **financiamento** e **custos fixos** em destaque.
 
 ## 4. Resumo para o corretor
 
