@@ -20,6 +20,7 @@ def checar_ambiente() -> None:
     print(f"  api_imoveis: {config.IMOVEIS_API_BASE}/listings")
     print(f"  LLM: {'configurado' if config.OPENAI_API_KEY else 'ausente (modo determinístico)'}")
     print(f"  modelo: {config.LLM_MODEL}")
+    print(f"  CRM: {config.CRM_WEBHOOK_URL or 'desabilitado (defina CRM_WEBHOOK_URL)'}")
     try:
         from src.db.session import init_db
 
@@ -66,7 +67,7 @@ def cmd_chat(lead_id: str, mensagem: str) -> None:
 def cmd_demo() -> None:
     """Roda os 3 cenários do enunciado (compra, investimento, follow-up)."""
     from src.agente.sdr import follow_up, processar_mensagem
-    from src.resumo.corretor import formatar_resumo_txt, montar_resumo
+    from src.resumo.corretor import exportar_resumo, formatar_resumo_txt, montar_resumo
     from src.memoria import conversa as memoria
 
     print("=== Cenário 1 — Compra ===\n")
@@ -94,9 +95,15 @@ def cmd_demo() -> None:
 
     print("=== Resumo para corretor (LEAD-001) ===\n")
     estado = memoria.carregar("LEAD-001")
-    resumo = montar_resumo(estado)
+    resumo = montar_resumo(estado, usar_llm=True)
     texto = formatar_resumo_txt(resumo)
     print(texto)
+    exportar_resumo(resumo)
+    from src.crm.cliente import EVENTO_RESUMO, sincronizar
+
+    crm = sincronizar(estado, resumo, evento=EVENTO_RESUMO)
+    memoria.salvar(estado)
+    print(f"\nCRM: {crm['status'] if crm else 'sem envio'}")
 
     config.SAIDAS_DIR.mkdir(parents=True, exist_ok=True)
     out = config.SAIDAS_DIR / "demo_cenarios.json"
@@ -128,15 +135,35 @@ def cmd_dashboard() -> None:
 
 def cmd_resumo(lead_id: str) -> None:
     from src.memoria import conversa as memoria
-    from src.resumo.corretor import formatar_resumo_txt, montar_resumo
+    from src.resumo.corretor import exportar_resumo, formatar_resumo_txt, montar_resumo
 
     estado = memoria.carregar(lead_id)
-    texto = formatar_resumo_txt(montar_resumo(estado))
-    print(texto)
-    path = config.SAIDAS_DIR / f"resumo_{lead_id}.txt"
-    config.SAIDAS_DIR.mkdir(parents=True, exist_ok=True)
-    path.write_text(texto, encoding="utf-8")
-    print(f"\nSalvo em {path}")
+    if not estado.get("mensagens"):
+        print(f"Lead {lead_id} não encontrado (nenhuma conversa salva).")
+        return
+    from src.crm.cliente import EVENTO_RESUMO, sincronizar
+
+    resumo = montar_resumo(estado, usar_llm=True)
+    print(formatar_resumo_txt(resumo))
+    paths = exportar_resumo(resumo)
+    print(f"\nSalvo em {paths['md']} e {paths['json']}")
+    crm = sincronizar(estado, resumo, evento=EVENTO_RESUMO)
+    memoria.salvar(estado)
+    print(f"CRM: {crm['status'] if crm else 'sem envio'}")
+
+
+def cmd_crm_servidor(porta: int) -> None:
+    import uvicorn
+
+    print(f"CRM simulado em http://127.0.0.1:{porta}  (webhook: /webhook/leads)")
+    print(f"No .env do agente: CRM_WEBHOOK_URL=http://127.0.0.1:{porta}/webhook/leads")
+    uvicorn.run("src.crm.servidor_mock:app", host="127.0.0.1", port=porta, log_level="warning")
+
+
+def cmd_crm_reenviar() -> None:
+    from src.crm.cliente import reenviar_pendentes
+
+    print(json.dumps(reenviar_pendentes(), ensure_ascii=False))
 
 
 def main() -> None:
@@ -148,6 +175,9 @@ def main() -> None:
     parser.add_argument("--lead", default="LEAD-DEMO", help="ID do lead (padrão LEAD-DEMO)")
     parser.add_argument("--resumo", metavar="LEAD_ID", help="Gera resumo para o corretor")
     parser.add_argument("--imoveis", action="store_true", help="Lista imóveis filtrados")
+    parser.add_argument("--crm-servidor", action="store_true", help="Sobe o CRM simulado (FastAPI)")
+    parser.add_argument("--crm-porta", type=int, default=8001)
+    parser.add_argument("--crm-reenviar", action="store_true", help="Reenvia eventos pendentes ao CRM")
     parser.add_argument("--intencao", choices=["compra", "aluguel", "investimento"])
     parser.add_argument("--regiao", type=str)
     parser.add_argument("--quartos", type=int)
@@ -155,6 +185,12 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    if args.crm_servidor:
+        cmd_crm_servidor(args.crm_porta)
+        return
+    if args.crm_reenviar:
+        cmd_crm_reenviar()
+        return
     if args.checar:
         checar_ambiente()
         return

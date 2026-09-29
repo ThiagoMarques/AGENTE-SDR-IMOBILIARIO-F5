@@ -9,7 +9,9 @@ import config
 from src.agenda.scheduler import sugerir_horarios
 from src.imoveis.catalogo import buscar_resultado, formatar_imovel
 from src.memoria import conversa as memoria
-from src.qualificacao.lead import campos_faltantes, proxima_pergunta, score_lead
+from src.crm.cliente import sincronizar as sincronizar_crm
+from src.qualificacao.extracao_llm import extrair_perfil_llm, mesclar_perfil
+from src.qualificacao.lead import campos_faltantes, proxima_pergunta, score_estado
 from src.resumo.corretor import montar_resumo
 
 _REGIOES = {
@@ -535,6 +537,7 @@ def processar_mensagem(lead_id: str, mensagem: str) -> dict[str, Any]:
     estado = memoria.carregar(lead_id)
     perfil_antes = dict(estado.get("perfil") or {})
     primeira = _primeira_interacao(estado)
+    qual_antes = score_estado(estado)  # referência para decidir eventos de CRM
 
     memoria.adicionar_mensagem(estado, "lead", mensagem)
 
@@ -543,7 +546,7 @@ def processar_mensagem(lead_id: str, mensagem: str) -> dict[str, Any]:
         # Não polui o perfil com sinais falsos; não busca catálogo
         perfil = perfil_antes
         estado["perfil"] = perfil
-        qual = score_lead(perfil)
+        qual = score_estado(estado)
         sugestoes: list[dict[str, Any]] = []
         resposta_llm = _resposta_llm(
             mensagem,
@@ -572,7 +575,7 @@ def processar_mensagem(lead_id: str, mensagem: str) -> dict[str, Any]:
     if _so_saudacao(mensagem) and not perfil_antes.get("intencao"):
         perfil = dict(perfil_antes)
         estado["perfil"] = perfil
-        qual = score_lead(perfil)
+        qual = score_estado(estado)
         resposta_llm = _resposta_llm(mensagem, estado, [], primeira=primeira)
         usou_llm = bool(resposta_llm)
         resposta = resposta_llm or _resposta_deterministica(
@@ -598,8 +601,12 @@ def processar_mensagem(lead_id: str, mensagem: str) -> dict[str, Any]:
         }
 
     perfil = extrair_sinais(mensagem, perfil_antes)
+    # LLM complementa/corrige a regex (se houver OPENAI_API_KEY); sem chave, nada muda.
+    perfil = mesclar_perfil(
+        perfil, extrair_perfil_llm(mensagem, perfil, estado.get("mensagens"))
+    )
     estado["perfil"] = perfil
-    qual = score_lead(perfil)
+    qual = score_estado(estado)
 
     sugestoes: list[dict[str, Any]] = []
     match_busca = "vazio"
@@ -648,6 +655,9 @@ def processar_mensagem(lead_id: str, mensagem: str) -> dict[str, Any]:
     )
 
     memoria.adicionar_mensagem(estado, "agente", resposta)
+    resumo = montar_resumo(estado)
+    # Envia ao CRM só se prioridade/prontidão mudou nesta mensagem
+    crm = sincronizar_crm(estado, resumo, qual_antes=qual_antes)
     memoria.salvar(estado)
 
     return {
@@ -659,8 +669,9 @@ def processar_mensagem(lead_id: str, mensagem: str) -> dict[str, Any]:
         "exibir_imoveis": mostrar,
         "match_busca": match_busca if mostrar else "vazio",
         "motivo_busca": motivo_busca if mostrar else "",
-        "resumo_corretor": montar_resumo(estado),
+        "resumo_corretor": resumo,
         "usou_llm": usou_llm,
+        "crm": crm,
         "fora_de_escopo": False,
     }
 
@@ -669,7 +680,7 @@ def follow_up(lead_id: str) -> dict[str, Any]:
     """Retoma conversa parada mantendo contexto (cenário 3 do desafio)."""
     estado = memoria.carregar(lead_id)
     perfil = estado.get("perfil") or {}
-    qual = score_lead(perfil)
+    qual = score_estado(estado)
     pergunta = proxima_pergunta(perfil)
 
     if estado.get("mensagens"):

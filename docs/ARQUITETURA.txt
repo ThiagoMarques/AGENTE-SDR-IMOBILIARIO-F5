@@ -54,6 +54,11 @@ Componentes
 7) src/agenda / src/resumo / src/dashboard
    Horários, pacote do corretor e métricas.
 
+8) src/crm
+   Webhook por evento (lead_atualizado, lead_qualificado, resumo_gerado)
+   + CRM simulado em FastAPI (python main.py --crm-servidor, porta 8001).
+   Detalhes em docs/QUALIFICACAO_E_RESUMO.md.
+
 Fluxo
 -----
 Lead (React) -> POST /chat -> memória/perfil (Postgres) -> qualificação
@@ -83,7 +88,7 @@ Diferenciais previstos (roadmap)
 - Canal WhatsApp / Chatwoot (gancho em POST /webhooks/canal)
 - Multiagentes (qualificador, buscador, agendador)
 - Voice AI
-- CRM / webhooks
+- CRM real (hoje: webhook + CRM simulado, ver src/crm)
 - Observabilidade e deploy em cloud
 
 Segurança e privacidade (Fase 5)

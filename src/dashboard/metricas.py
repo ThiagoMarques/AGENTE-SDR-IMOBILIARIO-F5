@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any
 
 from src.memoria import conversa as memoria
-from src.qualificacao.lead import score_lead
+from src.qualificacao.lead import score_estado
 
 
 def montar_dashboard() -> dict[str, Any]:
@@ -14,9 +14,11 @@ def montar_dashboard() -> dict[str, Any]:
     leads_out = []
     for c in conversas:
         perfil = c.get("perfil") or {}
-        q = score_lead(perfil)
-        prioridade = c.get("prioridade") or q["prioridade"]
-        score = c.get("score") if c.get("score") is not None else q["score"]
+        # Recalcula sempre: o valor gravado no banco é só cache e pode estar
+        # desatualizado se a regra de qualificação mudar (lista = detalhe).
+        q = score_estado(c)
+        prioridade = q["prioridade"]
+        score = q["score"]
         por_prioridade[prioridade] = por_prioridade.get(prioridade, 0) + 1
         agendamentos += len(c.get("agendamentos") or [])
         leads_out.append(

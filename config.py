@@ -40,3 +40,12 @@ CORS_ORIGINS = [
 
 SCORE_QUENTE = 70
 SCORE_MORNO = 40
+
+# Integração CRM via webhook (vazio = desabilitado)
+# Para a demo: python main.py --crm-servidor  ->  http://127.0.0.1:8001/webhook/leads
+CRM_WEBHOOK_URL = (os.getenv("CRM_WEBHOOK_URL") or "").strip()
+CRM_WEBHOOK_TOKEN = (os.getenv("CRM_WEBHOOK_TOKEN") or "").strip()
+CRM_TIMEOUT = float(os.getenv("CRM_TIMEOUT") or "3")
+CRM_PENDENTES = DADOS_DIR / "crm_pendentes.jsonl"
+CRM_MOCK_DB = DADOS_DIR / "crm_mock.json"
+

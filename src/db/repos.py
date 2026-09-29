@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from src.db.models import Agendamento, ImovelSugerido, Lead, Mensagem
-from src.qualificacao.lead import score_lead
+from src.qualificacao.lead import score_estado
 
 
 def _estado_vazio(lead_id: str) -> dict[str, Any]:
@@ -69,7 +69,7 @@ def carregar(session: Session, lead_id: str) -> dict[str, Any]:
 def salvar(session: Session, estado: dict[str, Any]) -> str:
     lead_id = str(estado["lead_id"])
     perfil = dict(estado.get("perfil") or {})
-    qual = score_lead(perfil)
+    qual = score_estado(estado)  # mesmo score (com engajamento) que o agente mostra
 
     lead = session.scalar(
         select(Lead)

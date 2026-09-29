@@ -50,6 +50,33 @@ export type Dashboard = {
   }>;
 };
 
+export type CriterioScore = {
+  criterio: string;
+  pontos: number;
+  maximo: number;
+  motivo: string;
+};
+
+/** Pacote do corretor (GET /leads/{id}/resumo) — src/resumo/corretor.py */
+export type ResumoCorretor = {
+  lead_id: string;
+  gerado_em?: string;
+  gerado_por?: "regras" | "llm" | string;
+  sinopse?: string;
+  perfil: Record<string, unknown>;
+  qualificacao: Qualificacao & {
+    encaminhamento?: string;
+    criterios?: CriterioScore[];
+    justificativa?: string;
+  };
+  encaminhamento?: string;
+  objecoes?: string[];
+  pontos_atencao?: string[];
+  imoveis_sugeridos?: string[];
+  agendamentos?: Array<{ tipo?: string; horario?: string; status?: string }>;
+  acao_sugerida?: string;
+};
+
 export type ChatResponse = {
   lead_id: string;
   resposta: string;
@@ -71,7 +98,7 @@ export const api = {
     }),
   dashboard: () => request<Dashboard>("/dashboard"),
   lead: (id: string) => request<Lead>(`/leads/${encodeURIComponent(id)}`),
-  resumo: (id: string) => request<Record<string, unknown>>(`/leads/${encodeURIComponent(id)}/resumo`),
+  resumo: (id: string) => request<ResumoCorretor>(`/leads/${encodeURIComponent(id)}/resumo`),
   followUp: (id: string) =>
     request<{ resposta: string; qualificacao: Qualificacao }>(
       `/leads/${encodeURIComponent(id)}/follow-up`,
