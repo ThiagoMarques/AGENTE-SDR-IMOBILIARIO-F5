@@ -2,7 +2,7 @@
 
 Prova de conceito (POC) de um **SDR imobiliário com IA generativa**, desenvolvida no Hackathon da Fase 5 da pós-graduação **IA para Devs (FIAP PosTech)**.
 
-O agente atende leads por um **chat web**, identifica se o cliente quer comprar, alugar ou investir e qualifica o lead com um score explicável. Ele também sugere imóveis de um catálogo simulado, faz follow-up, propõe horários de visita, gera um resumo para o corretor e sincroniza o lead com um CRM. O corretor acompanha tudo por um **dashboard**.
+O agente atende leads por um **chat web**, identifica se o cliente quer comprar, alugar ou investir e qualifica o lead com um score explicável. Ele também sugere imóveis de um catálogo simulado, faz follow-up, **agenda visitas pelo próprio chat (com integração ao Google Agenda e ao Outlook)**, gera um resumo para o corretor e sincroniza o lead com um CRM. O corretor acompanha tudo por um **dashboard**.
 
 **Stack:** Python, FastAPI, PostgreSQL (Docker), React + Vite + TypeScript e OpenAI (opcional).
 
@@ -49,7 +49,7 @@ O agente assume o primeiro atendimento e a qualificação. O corretor recebe só
 | Coletar informações relevantes | ✅ Funil com uma pergunta por vez + extração estruturada com LLM | `src/coleta/perfil.py`, `src/qualificacao/extracao_llm.py` |
 | Qualificar clientes | ✅ Score ponderado 0–100 com justificativa | `src/qualificacao/lead.py` |
 | Follow-up automático | ✅ Retoma a conversa com contexto | `src/agente/sdr.py` (`follow_up`), `POST /leads/{id}/follow-up` |
-| Agendar reuniões ou visitas | ✅ Sugestão e registro de horários | `src/agenda/scheduler.py`, `POST /leads/{id}/agendar` |
+| Agendar reuniões ou visitas | ✅ O lead escolhe no chat ("amanhã às 10", "o segundo", "quinta 15h"); o agente registra, remarca, cancela e cria o evento no Google Agenda / Outlook do corretor | `src/agenda/`, `POST /leads/{id}/agendar` |
 | Integrar com base simulada de imóveis | ✅ Catálogo sintético Brasil em BRL (padrão) ou [Fake Real Estate API](https://fakeapifordevs.vercel.app/docs/realestate) | `src/imoveis/` |
 | Gerar resumos para corretores | ✅ Markdown + JSON, com sinopse por LLM | `src/resumo/corretor.py`, `GET /leads/{id}/resumo` |
 | Dashboard mínimo | ✅ Página do corretor com leads por prioridade | `frontend/src/pages/DashboardPage.tsx`, `GET /dashboard` |
@@ -60,6 +60,7 @@ O agente assume o primeiro atendimento e a qualificação. O corretor recebe só
 |---|---|
 | Memória conversacional | Histórico, perfil, agendamentos e imóveis sugeridos persistidos no PostgreSQL |
 | Integração com CRM | Webhook HTTP por evento + CRM simulado em FastAPI com painel web (`src/crm/`) |
+| Integração com agenda | Google Agenda (Calendar API) e Outlook (Microsoft Graph): evento na agenda do corretor, convite ao lead e consulta de horários ocupados. Sem credenciais, o lead recebe links "adicionar à agenda" e `.ics` (`src/agenda/`) |
 | Segurança | Credenciais só no `.env`, token Bearer no webhook do CRM, dados sintéticos |
 
 ## Arquitetura
@@ -73,7 +74,7 @@ Frontend React (Chat + Dashboard) ──► API FastAPI (api/app.py) ──► p
       ├─► Qualificação ....... score ponderado, prioridade, encaminhamento
       ├─► Catálogo ........... catálogo BR sintético ou Fake Real Estate API (src/imoveis)
       ├─► Resposta ........... LLM (OpenAI) ou fluxo determinístico
-      ├─► Agenda ............. sugere horários quando o lead está pronto
+      ├─► Agenda ............. horários livres, leitura da escolha, Google Agenda / Outlook (src/agenda)
       ├─► Resumo ............. pacote para o corretor (src/resumo)
       └─► CRM ................ webhook por evento ──► CRM simulado (FastAPI, :8001)
 ```
@@ -86,6 +87,7 @@ A CLI (`main.py`) usa o mesmo núcleo e serve para demonstrar os cenários do en
 - **LLM opcional com fallback:** sem `OPENAI_API_KEY` ou com falha na API, tudo continua funcionando no modo por regras.
 - **Adapter para o CRM:** o agente depende de uma interface (`CRMAdapter`), não de um fornecedor. Trocar o CRM simulado por um real é só trocar a URL ou a implementação.
 - **Resiliência:** uma falha no CRM não interrompe o atendimento. Os eventos ficam numa fila local e podem ser reenviados.
+- **Adapter para a agenda:** Google e Outlook implementam a mesma interface (`criar`, `adicionar_convidados`, `cancelar`, `ocupados`). Se a API da agenda falhar, a visita continua registrada e os links/.ics continuam valendo.
 
 Mais detalhes em [`docs/ARQUITETURA.txt`](docs/ARQUITETURA.txt) e [`docs/QUALIFICACAO_E_RESUMO.md`](docs/QUALIFICACAO_E_RESUMO.md).
 
@@ -136,7 +138,10 @@ Prioridade: **quente** ≥ 70 · **morno** ≥ 40 · **frio** < 40. **Sem orçam
 │   │   └── catalogo_br.py      # Catálogo sintético Brasil (BRL)
 │   ├── memoria/conversa.py     # Memória do lead (usa src/db)
 │   ├── db/                     # SQLAlchemy: modelos, sessão, repositórios
-│   ├── agenda/scheduler.py     # Horários de visita/reunião
+│   ├── agenda/
+│   │   ├── scheduler.py        # Horários livres, leitura da escolha, agendar/remarcar/cancelar
+│   │   ├── calendario.py       # Links Google/Outlook, .ics, Google Calendar API, Microsoft Graph
+│   │   └── oauth.py            # Autorização única (--agenda-auth google|outlook)
 │   ├── resumo/corretor.py      # Resumo para o corretor (.md e .json)
 │   ├── crm/
 │   │   ├── cliente.py          # Webhook, eventos, fila de pendentes
@@ -185,7 +190,33 @@ cd frontend && npm install && npm run dev
 
 Abra **http://localhost:5173**. No chat você conversa como lead; no dashboard, acompanha os leads como corretor. O front acessa a API pelo proxy `/api` do Vite.
 
-**Principais rotas da API:** `POST /chat`, `GET /leads`, `GET /leads/{id}`, `GET /leads/{id}/resumo`, `POST /leads/{id}/follow-up`, `POST /leads/{id}/agendar`, `GET /dashboard`, `GET /health`.
+**Principais rotas da API:** `POST /chat`, `GET /leads`, `GET /leads/{id}`, `GET /leads/{id}/resumo`, `POST /leads/{id}/follow-up`, `POST /leads/{id}/agendar`, `GET /leads/{id}/agendamentos/{n}/convite.ics`, `GET /dashboard`, `GET /health`.
+
+### Agendamento de visitas (Google Agenda e Outlook)
+
+Quando o lead está qualificado, o agente oferece três horários livres. O lead responde do jeito que falaria com uma pessoa ("pode ser amanhã às 10", "o segundo", "quinta 15h", "prefiro à tarde", "nenhum desses") e o agente confirma a visita. Também dá para remarcar ("preciso remarcar") e cancelar ("quero cancelar a visita"). Se o lead informar o e-mail, ele entra como convidado do evento.
+
+A integração funciona em três níveis:
+
+| Nível | Precisa de credencial? | O que acontece |
+|---|---|---|
+| Links e `.ics` | Não | O chat mostra os botões **Google Agenda**, **Outlook**, **Microsoft 365** e **Baixar .ics** para o lead salvar a visita |
+| Evento na agenda do corretor | Sim | Evento criado via Google Calendar API ou Microsoft Graph, com convite por e-mail ao lead |
+| Horários livres | Sim | O agente só oferece horários em que o corretor não tem compromisso |
+
+**Conectar o Google Agenda (Gmail/Workspace)**
+
+1. No [Google Cloud Console](https://console.cloud.google.com/), ative a **Google Calendar API**, configure a tela de consentimento e crie uma credencial OAuth do tipo **App para computador**.
+2. Preencha `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` no `.env`.
+3. Rode `python main.py --agenda-auth google`: o navegador abre, você autoriza e o token é salvo em `dados/agenda_tokens.json`.
+
+**Conectar o Outlook (Outlook.com/Microsoft 365)**
+
+1. No [Microsoft Entra](https://entra.microsoft.com/), registre um app com contas "qualquer diretório + pessoais", habilite **Permitir fluxos de cliente público** e adicione a permissão delegada `Calendars.ReadWrite`.
+2. Preencha `MS_CLIENT_ID` no `.env` (e `MS_TENANT`, se for só da sua organização).
+3. Rode `python main.py --agenda-auth outlook` e digite o código exibido em microsoft.com/devicelogin.
+
+Confira com `python main.py --checar` (linha `agenda:`) ou `GET /health` (campo `agenda`).
 
 ### Demonstração pela CLI (3 cenários do desafio)
 
@@ -209,6 +240,7 @@ A demo roda três cenários: **compra** ("apartamento na zona sul"), **investime
 | `python main.py --imoveis --intencao compra --quartos 2 --preco-max 500000` | Consulta o catálogo |
 | `python main.py --crm-servidor [--crm-porta 8001]` | Sobe o CRM simulado |
 | `python main.py --crm-reenviar` | Reenvia eventos que falharam ao CRM |
+| `python main.py --agenda-auth google` / `outlook` | Conecta a agenda do corretor (autorização única) |
 
 ### Exemplo de resumo para o corretor
 
@@ -246,6 +278,7 @@ Os testes rodam **sem internet, sem LLM e sem banco**: o catálogo é simulado, 
 - **Resumo:** conteúdo, objeções, pontos de atenção, exportação.
 - **CRM:** envio HTTP real contra o CRM simulado, upsert, fila de pendentes, token e eventos disparados pelo agente.
 - **LLM simulado:** cliente OpenAI falso para validar parsing, validação Pydantic e fallback.
+- **Agenda:** leitura de horários em linguagem natural (sem falso positivo em "2 quartos" ou "900 mil"), horários livres, links Google/Outlook, `.ics` (RFC 5545), provedores Google/Microsoft com HTTP simulado, agendar/remarcar/cancelar pelo chat, contador do dashboard e rota `.ics`.
 - **Validação ponta a ponta:** 12 conversas realistas pelo fluxo completo. Os casos marcados como `xfail` são **defeitos conhecidos** da extração por regex (ver [Limitações conhecidas](#limitações-conhecidas)). Quando um deles for corrigido, o teste acusa XPASS, avisando para remover a marcação.
 
 ## Configuração (.env)
@@ -262,6 +295,13 @@ Os testes rodam **sem internet, sem LLM e sem banco**: o catálogo é simulado, 
 | `CRM_WEBHOOK_URL` | Não | — | URL do webhook do CRM. Vazio desabilita. |
 | `CRM_WEBHOOK_TOKEN` | Não | — | Token Bearer exigido pelo CRM |
 | `CRM_TIMEOUT` | Não | `3` | Timeout do envio ao CRM (segundos) |
+| `AGENDA_TZ` | Não | `America/Sao_Paulo` | Fuso dos horários oferecidos |
+| `AGENDA_DURACAO_MIN` | Não | `60` | Duração da visita (minutos) |
+| `AGENDA_IMOBILIARIA` | Não | `Imobiliária` | Nome usado no título do evento |
+| `AGENDA_CORRETOR_EMAIL` | Não | — | Contato exibido no convite do lead |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Não | — | Credencial OAuth (App para computador) do Google |
+| `GOOGLE_CALENDAR_ID` | Não | `primary` | Agenda do corretor no Google |
+| `MS_CLIENT_ID` / `MS_TENANT` | Não | — / `common` | App do Microsoft Entra para o Outlook |
 
 ## Segurança e privacidade
 
@@ -269,12 +309,13 @@ Os testes rodam **sem internet, sem LLM e sem banco**: o catálogo é simulado, 
 - O catálogo usa dados **sintéticos** (catálogo BR gerado ou API fake pública).
 - O webhook do CRM aceita autenticação por token Bearer, e o CRM simulado responde 401 se o token não bater.
 - As conversas ficam no PostgreSQL local, e as saídas geradas em `dados/`, fora do Git.
+- Os tokens da agenda ficam em `dados/agenda_tokens.json` (permissão 600, fora do Git). Os escopos pedidos são só os de eventos e disponibilidade da agenda.
+- O evento enviado ao lead não leva score nem prioridade: só os dados que ele mesmo informou.
 - O agente **não fecha negócio sozinho**: ele qualifica e resume, e a decisão é do corretor.
 
 ## Limitações conhecidas
 
 - **Extração por regex** (usada quando não há LLM ou ele falha) erra em alguns formatos:
-  - "1,5 milhão" vira orçamento 1;
   - "800k" não é reconhecido;
   - "dois quartos" (por extenso) não é lido;
   - bairros fora da lista fixa são ignorados;
@@ -285,7 +326,7 @@ Os testes rodam **sem internet, sem LLM e sem banco**: o catálogo é simulado, 
   Todos estão documentados em `tests/test_validacao_qualificacao.py`. Com o LLM ligado, a extração dele tem precedência e corrige boa parte desses casos.
 - **Com `IMOVEIS_SOURCE=fake`, uma falha na API externa interrompe a conversa.** O catálogo BR (padrão) é local e não tem esse risco.
 - **O CRM é simulado.** A integração (HTTP, token, eventos) é real, mas o destino é um servidor local.
-- **O agendamento sugere horários fixos** e não consulta uma agenda real.
+- **Agenda:** sem credenciais, os horários oferecidos são janelas padrão (10h, 14h e 16h, sem domingo) e não há checagem de conflito. A agenda é de um único corretor, sem rodízio entre corretores.
 - **O webhook de canal (`POST /webhooks/canal`) é um stub**, ou seja, um gancho preparado para WhatsApp/Chatwoot, sem integração ativa.
 
 ## Roadmap

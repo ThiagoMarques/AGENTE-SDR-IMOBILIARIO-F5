@@ -60,6 +60,9 @@ class Agendamento(Base):
     tipo: Mapped[str] = mapped_column(String(32), default="reuniao")
     status: Mapped[str] = mapped_column(String(32), default="agendado")
     imovel_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    inicio: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # uid do .ics, duração, convidados e ids dos eventos no Google/Outlook
+    detalhes: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     lead: Mapped[Lead] = relationship(back_populates="agendamentos")
 

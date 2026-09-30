@@ -44,8 +44,10 @@ def lead_para_estado(lead: Lead) -> dict[str, Any]:
                 "horario": a.horario,
                 "imovel_id": a.imovel_id,
                 "status": a.status,
+                "inicio": a.inicio.isoformat() if a.inicio else None,
+                "detalhes": dict(a.detalhes or {}),
             }
-            for a in (lead.agendamentos or [])
+            for a in sorted(lead.agendamentos or [], key=lambda x: x.id or 0)
         ],
         "imoveis_sugeridos": [i.imovel_id for i in (lead.imoveis_sugeridos or [])],
     }
@@ -106,12 +108,20 @@ def salvar(session: Session, estado: dict[str, Any]) -> str:
 
     lead.agendamentos.clear()
     for a in estado.get("agendamentos") or []:
+        inicio = None
+        if a.get("inicio"):
+            try:
+                inicio = datetime.fromisoformat(str(a["inicio"]))
+            except ValueError:
+                inicio = None
         lead.agendamentos.append(
             Agendamento(
                 horario=a.get("horario") or "",
                 tipo=a.get("tipo") or "reuniao",
                 status=a.get("status") or "agendado",
                 imovel_id=a.get("imovel_id"),
+                inicio=inicio,
+                detalhes=a.get("detalhes") or None,
             )
         )
 

@@ -49,3 +49,22 @@ CRM_TIMEOUT = float(os.getenv("CRM_TIMEOUT") or "3")
 CRM_PENDENTES = DADOS_DIR / "crm_pendentes.jsonl"
 CRM_MOCK_DB = DADOS_DIR / "crm_mock.json"
 
+# Agenda: links/.ics funcionam sem credencial; Google/Outlook só com OAuth configurado.
+# Tokens: python main.py --agenda-auth google|outlook  (salvos em dados/agenda_tokens.json)
+AGENDA_TZ = (os.getenv("AGENDA_TZ") or "America/Sao_Paulo").strip()
+AGENDA_DURACAO_MIN = int(os.getenv("AGENDA_DURACAO_MIN") or "60")
+AGENDA_CORRETOR_EMAIL = (os.getenv("AGENDA_CORRETOR_EMAIL") or "").strip()
+AGENDA_IMOBILIARIA = (os.getenv("AGENDA_IMOBILIARIA") or "Imobiliária").strip()
+AGENDA_TIMEOUT = float(os.getenv("AGENDA_TIMEOUT") or "5")
+AGENDA_TOKENS = DADOS_DIR / "agenda_tokens.json"
+
+GOOGLE_CLIENT_ID = (os.getenv("GOOGLE_CLIENT_ID") or "").strip()
+GOOGLE_CLIENT_SECRET = (os.getenv("GOOGLE_CLIENT_SECRET") or "").strip()
+GOOGLE_REFRESH_TOKEN = (os.getenv("GOOGLE_REFRESH_TOKEN") or "").strip()
+GOOGLE_CALENDAR_ID = (os.getenv("GOOGLE_CALENDAR_ID") or "primary").strip()
+
+MS_CLIENT_ID = (os.getenv("MS_CLIENT_ID") or "").strip()
+MS_CLIENT_SECRET = (os.getenv("MS_CLIENT_SECRET") or "").strip()
+MS_TENANT = (os.getenv("MS_TENANT") or "common").strip()
+MS_REFRESH_TOKEN = (os.getenv("MS_REFRESH_TOKEN") or "").strip()
+

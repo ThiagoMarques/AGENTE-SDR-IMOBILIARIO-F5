@@ -74,7 +74,6 @@ def test_c05_orcamento_em_k():
     assert r["perfil"].get("faixa_preco") == 800000
 
 
-@pytest.mark.xfail(strict=True, reason=REGEX + ': "1,5 milhão" vira 1')
 def test_c06_orcamento_em_milhao():
     r = conversar("C06", "Quero comprar cobertura no Itaim, 4 quartos, até 1,5 milhão, o quanto antes.")
     assert r["perfil"].get("faixa_preco") == 1500000

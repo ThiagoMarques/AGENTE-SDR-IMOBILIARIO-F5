@@ -1,5 +1,6 @@
 import { Chip } from "@heroui/react";
 import type { ResumoCorretor as Resumo } from "../api";
+import { AgendamentoCard } from "./AgendamentoCard";
 import { PriorityChip } from "./PriorityChip";
 
 /**
@@ -17,6 +18,12 @@ const ROTULOS: Record<string, string> = {
   urgencia: "Urgência",
   retorno_esperado: "Retorno esperado",
   perfil: "Perfil de investidor",
+  email: "E-mail",
+};
+
+const STATUS_AGENDAMENTO: Record<string, string> = {
+  remarcado: "remarcado",
+  cancelado: "cancelado",
 };
 
 const NOMES_CRITERIOS: Record<string, string> = {
@@ -56,6 +63,9 @@ export function ResumoCorretor({ resumo }: { resumo: Resumo }) {
   const objecoes = resumo.objecoes || [];
   const pontos = resumo.pontos_atencao || [];
   const imoveis = resumo.imoveis_sugeridos || [];
+  const agendamentos = resumo.agendamentos || [];
+  const ativos = agendamentos.filter((a) => a.status === "agendado");
+  const historico = agendamentos.filter((a) => a.status !== "agendado");
 
   return (
     <div className="space-y-5">
@@ -175,6 +185,25 @@ export function ResumoCorretor({ resumo }: { resumo: Resumo }) {
       {imoveis.length > 0 && (
         <Secao titulo={`Imóveis sugeridos (${imoveis.length})`}>
           <p className="text-sm text-slate-700">{imoveis.join(", ")}</p>
+        </Secao>
+      )}
+
+      {agendamentos.length > 0 && (
+        <Secao titulo="Agendamentos">
+          <div className="space-y-2">
+            {ativos.map((a) => (
+              <AgendamentoCard key={a.indice} agendamento={a} compacto />
+            ))}
+            {historico.length > 0 && (
+              <ul className="space-y-0.5 text-xs text-slate-500">
+                {historico.map((a) => (
+                  <li key={a.indice} className="line-through decoration-slate-300">
+                    {a.quando} · {STATUS_AGENDAMENTO[a.status] || a.status}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </Secao>
       )}
     </div>

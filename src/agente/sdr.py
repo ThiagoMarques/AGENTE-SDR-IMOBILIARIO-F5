@@ -3,13 +3,37 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import timedelta
 from typing import Any
 
 import config
-from src.agenda.scheduler import sugerir_horarios
+from src.agenda.calendario import horarios_ocupados
+from src.agenda.scheduler import (
+    agendamento_ativo,
+    agendar,
+    cancelar,
+    convidar_lead,
+    extrair_email,
+    formatar_humano,
+    horarios_no_texto,
+    inicio_do,
+    interpretar_escolha,
+    obter_imovel,
+    pede_cancelamento,
+    pede_remarcacao,
+    publico,
+    remarcar,
+    rotulo_dia,
+    sugerir_horarios,
+)
 from src.imoveis.catalogo import buscar_resultado, formatar_imovel
 from src.memoria import conversa as memoria
-from src.crm.cliente import sincronizar as sincronizar_crm
+from src.crm.cliente import (
+    EVENTO_AGENDADO,
+    EVENTO_CANCELADO,
+    EVENTO_REMARCADO,
+    sincronizar as sincronizar_crm,
+)
 from src.qualificacao.extracao_llm import extrair_perfil_llm, mesclar_perfil
 from src.qualificacao.lead import campos_faltantes, proxima_pergunta, score_estado
 from src.resumo.corretor import montar_resumo
@@ -188,7 +212,7 @@ def _fmt_moeda(valor: float) -> str:
     if v >= 1_000_000:
         mi = v / 1_000_000
         if abs(mi - round(mi, 1)) < 1e-6:
-            txt = f"{mi:.1f}".rstrip("0").rstrip(".")
+            txt = f"{mi:.1f}".rstrip("0").rstrip(".").replace(".", ",")
             return f"R$ {txt} mi"
         return f"R$ {mi:.2f} mi".replace(".", ",")
     if v >= 1000:
@@ -242,13 +266,18 @@ def extrair_sinais(texto: str, perfil: dict[str, Any]) -> dict[str, Any]:
         if m_so_num:
             novo["quartos"] = int(m_so_num.group(1))
 
+    m_mi = re.search(r"(\d+(?:[.,]\d+)?)\s*(?:milh[aã]o|milh[oõ]es|mi)\b", t)
     m_mil = re.search(
         r"(?:até|ate|max(?:imo)?|no máximo|ticket(?:\s*de)?)\s*r?\$?\s*([\d\.]+)\s*mil\b",
         t,
     )
     if not m_mil:
         m_mil = re.search(r"([\d\.]+)\s*mil\b", t)
-    if m_mil:
+    if m_mi:
+        novo["faixa_preco"] = float(m_mi.group(1).replace(",", ".")) * 1_000_000
+        if "ticket" in t:
+            novo["ticket"] = novo["faixa_preco"]
+    elif m_mil:
         novo["faixa_preco"] = float(m_mil.group(1).replace(".", "")) * 1000
         if "ticket" in t:
             novo["ticket"] = novo["faixa_preco"]
@@ -348,22 +377,194 @@ def _resposta_fora_de_escopo(*, primeira: bool) -> str:
     )
 
 
-def _oferecer_agenda(sugestoes: list[dict[str, Any]]) -> str:
-    horarios = sugerir_horarios(3)
+def _lista_horarios(horarios: list[str]) -> str:
+    return "\n".join(f"• {h}" for h in horarios)
+
+
+def _oferecer_agenda(sugestoes: list[dict[str, Any]], horarios: list[str] | None = None) -> str:
+    horarios = horarios if horarios is not None else sugerir_horarios(3)
     linhas = [
         "Acho que já tenho o essencial do seu perfil.",
         "Que tal marcarmos uma conversa rápida ou uma visita com um corretor?",
         "Horários que posso oferecer:",
+        _lista_horarios(horarios),
+        "Qual desses te encaixa melhor? Se preferir outro dia/horário, me fala.",
     ]
-    for h in horarios:
-        linhas.append(f"• {h}")
-    linhas.append("Qual desses te encaixa melhor? Se preferir outro dia/horário, me fala.")
     if sugestoes:
         linhas.insert(
             1,
             "Posso já alinhar a visita em cima das opções que separamos.",
         )
     return "\n".join(linhas)
+
+
+_ID_IMOVEL = re.compile(r"\bBR-[A-Z]{2}-\d{3}\b", re.IGNORECASE)
+
+_MOTIVO_HORARIO_INVALIDO = {
+    "passado": "Esse horário já passou (ou está muito em cima).",
+    "domingo": "Domingo não temos corretor de plantão.",
+    "fora_expediente": "As visitas acontecem entre 8h e 19h.",
+}
+
+
+def _ultima_fala_agente(estado: dict[str, Any]) -> str:
+    for m in reversed(estado.get("mensagens") or []):
+        if m.get("papel") == "agente":
+            return str(m.get("texto") or "")
+    return ""
+
+
+def _tipo_agendamento(texto: str) -> str:
+    t = texto.lower()
+    termos = ("reunião", "reuniao", "conversa", "ligação", "ligacao", "online", "videochamada", "call")
+    return "reuniao" if any(p in t for p in termos) else "visita"
+
+
+def _imovel_do_contexto(estado: dict[str, Any], texto: str) -> str | None:
+    m = _ID_IMOVEL.search(texto)
+    candidatos = ([m.group(0).upper()] if m else []) + list(estado.get("imoveis_sugeridos") or [])
+    return next((c for c in candidatos if obter_imovel(c)), None)
+
+
+def _convite_enviado(ag: dict[str, Any]) -> bool:
+    return any(c.get("status") == "criado" for c in (ag.get("detalhes") or {}).get("calendarios") or [])
+
+
+def _texto_confirmacao(ag: dict[str, Any], *, remarcado: bool, email: str | None) -> str:
+    inicio = inicio_do(ag)
+    quando = formatar_humano(inicio) if inicio else str(ag.get("horario"))
+    oque = "Visita" if ag.get("tipo") == "visita" else "Conversa com o corretor"
+    partes = [f"{'Remarcado' if remarcado else 'Fechado'}! {oque} marcada para {quando}."]
+    imovel = obter_imovel(ag.get("imovel_id"))
+    if imovel:
+        partes.append(f"Imóvel: {imovel.get('titulo')} — {imovel.get('endereco')}.")
+    if email and _convite_enviado(ag):
+        partes.append(f"O convite vai chegar em {email}. Deixei aqui embaixo os atalhos da agenda também.")
+    elif email:
+        partes.append(f"Anotei seu e-mail ({email}). Deixei aqui embaixo os atalhos para salvar na agenda.")
+    else:
+        partes.append(
+            "Deixei aqui embaixo os atalhos para salvar na sua agenda (Google, Outlook ou .ics). "
+            "Se quiser receber o convite por e-mail, me passa seu e-mail."
+        )
+    partes.append("Se precisar mudar, é só me avisar.")
+    return "\n\n".join(partes)
+
+
+def _oferta(texto: str, horarios: list[str], fecho: str = "Qual fica melhor?") -> str:
+    return f"{texto}\n{_lista_horarios(horarios)}\n{fecho}"
+
+
+def _tratar_agenda(estado: dict[str, Any], mensagem: str) -> dict[str, Any] | None:
+    """Escolha/remarcação/cancelamento de visita. None = seguir o fluxo normal de qualificação."""
+    perfil = estado.get("perfil") or {}
+    ativo = agendamento_ativo(estado)
+    ofertados = horarios_no_texto(_ultima_fala_agente(estado))
+    email = extrair_email(mensagem)
+    if email:
+        perfil["email"] = email
+        estado["perfil"] = perfil
+
+    if ativo and pede_cancelamento(mensagem):
+        cancelar(estado)
+        inicio = inicio_do(ativo)
+        quando = formatar_humano(inicio) if inicio else ativo.get("horario")
+        return {
+            "resposta": f"Tudo certo, cancelei a visita de {quando}. Quando quiser remarcar, é só me chamar.",
+            "evento": EVENTO_CANCELADO,
+        }
+
+    remarcacao = bool(ativo) and pede_remarcacao(mensagem)
+    contexto = (
+        bool(ofertados)
+        or remarcacao
+        or _quer_agendar(mensagem)
+        or _quer_agendar(_ultima_fala_agente(estado))
+    )
+    escolha = interpretar_escolha(mensagem, ofertados)
+    if escolha and not contexto and not escolha.explicita:
+        escolha = None
+
+    if email and ativo and not (escolha and escolha.inicio):
+        convidar_lead(estado, email)
+        extra = (
+            " O convite da visita já está a caminho."
+            if _convite_enviado(ativo)
+            else " O corretor confirma a visita por lá."
+        )
+        return {"resposta": f"Perfeito, anotei {email}.{extra}", "evento": None}
+
+    if escolha is None:
+        if remarcacao and ativo:
+            novos = sugerir_horarios(3, evitar=[str(ativo.get("horario"))])
+            return {
+                "resposta": _oferta(
+                    "Claro, a gente remarca. Tenho estes horários:",
+                    novos,
+                    "Qual fica melhor? Se preferir, me diga dia e hora.",
+                ),
+                "evento": None,
+            }
+        return None
+
+    if escolha.recusou:
+        novos = sugerir_horarios(3, evitar=ofertados)
+        return {
+            "resposta": _oferta(
+                "Sem problema! Outras opções:",
+                novos,
+                "Ou me diga um dia e horário que funcionem pra você.",
+            ),
+            "evento": None,
+        }
+
+    if escolha.invalido:
+        dia = escolha.inicio.date() if escolha.inicio else escolha.dia
+        novos = (sugerir_horarios(3, dia=dia) if escolha.invalido == "fora_expediente" and dia else []) or sugerir_horarios(3)
+        motivo = _MOTIVO_HORARIO_INVALIDO.get(escolha.invalido, "Esse horário não dá.")
+        return {"resposta": _oferta(f"{motivo} Posso te oferecer:", novos, "Algum desses funciona?"), "evento": None}
+
+    if escolha.inicio is None:
+        novos = sugerir_horarios(3, dia=escolha.dia, periodo=escolha.periodo)
+        if novos:
+            abertura = f"{rotulo_dia(escolha.dia).capitalize()} tenho:" if escolha.dia else "Nesse período tenho:"
+            return {"resposta": _oferta(abertura, novos, "Qual prefere?"), "evento": None}
+        novos = sugerir_horarios(3, periodo=escolha.periodo)
+        return {"resposta": _oferta("Nesse dia não tenho horário livre. Que tal:", novos), "evento": None}
+
+    inicio = escolha.inicio
+    fim = inicio + timedelta(minutes=config.AGENDA_DURACAO_MIN)
+    if any(o_ini < fim and inicio < o_fim for o_ini, o_fim in horarios_ocupados(inicio, fim)):
+        novos = sugerir_horarios(3, dia=inicio.date()) or sugerir_horarios(3)
+        return {
+            "resposta": _oferta("Nesse horário o corretor já tem compromisso. Tenho livre:", novos),
+            "evento": None,
+        }
+
+    email_lead = perfil.get("email")
+
+    if ativo:
+        if inicio_do(ativo) == inicio:
+            return {"resposta": _texto_confirmacao(ativo, remarcado=False, email=email_lead), "evento": None}
+        ag = remarcar(estado, inicio)
+        return {"resposta": _texto_confirmacao(ag, remarcado=True, email=email_lead), "evento": EVENTO_REMARCADO}
+
+    ag = agendar(
+        estado,
+        inicio,
+        tipo=_tipo_agendamento(mensagem),
+        imovel_id=_imovel_do_contexto(estado, mensagem),
+        email=email_lead,
+    )
+    return {"resposta": _texto_confirmacao(ag, remarcado=False, email=email_lead), "evento": EVENTO_AGENDADO}
+
+
+def _agendamento_publico(estado: dict[str, Any]) -> dict[str, Any] | None:
+    ativo = agendamento_ativo(estado)
+    if not ativo:
+        return None
+    indice = (estado.get("agendamentos") or []).index(ativo)
+    return publico(ativo, str(estado.get("lead_id") or ""), indice)
 
 
 def _bloco_imoveis(
@@ -410,6 +611,8 @@ def _resposta_deterministica(
     mostrar_imoveis: bool,
     match_busca: str = "exato",
     motivo_busca: str = "",
+    horarios: list[str] | None = None,
+    agendado: str = "",
 ) -> str:
     perfil = estado.get("perfil") or {}
     partes: list[str] = []
@@ -449,11 +652,13 @@ def _resposta_deterministica(
 
     if pergunta and not (mostrar_imoveis and sugestoes):
         partes.append(pergunta)
+    elif agendado:
+        partes.append(f"Sua visita segue marcada para {agendado}. Quer ver mais alguma opção até lá?")
     elif qual.get("pronto_para_agendar") or _quer_agendar(mensagem):
         if not (mostrar_imoveis and sugestoes):
-            partes.append(_oferecer_agenda([]))
+            partes.append(_oferecer_agenda([], horarios))
         else:
-            partes.append(_oferecer_agenda(sugestoes))
+            partes.append(_oferecer_agenda(sugestoes, horarios))
     elif not (mostrar_imoveis and sugestoes) and not pergunta:
         partes.append("Quer que eu ajuste a busca ou já te conecte com um corretor?")
 
@@ -475,6 +680,8 @@ def _resposta_llm(
     pronto_para_agendar: bool = False,
     match_busca: str = "exato",
     motivo_busca: str = "",
+    horarios: list[str] | None = None,
+    agendado: str = "",
 ) -> str | None:
     if not config.OPENAI_API_KEY:
         return None
@@ -507,12 +714,21 @@ def _resposta_llm(
             "o que TEM (só da lista) e pergunte se quer ver/ajustar.\n"
             "- Proibido jargão: match, lead score, perfil completo, estoque filtrado.\n"
             "- Não se apresente de novo se a conversa já começou.\n"
-            "- Fora de escopo: recuse e volte para imóveis."
+            "- Fora de escopo: recuse e volte para imóveis.\n"
+            "- Horários: NUNCA invente. Se for oferecer visita, liste EXATAMENTE os horários "
+            "livres fornecidos, um por linha, no formato '• dd/mm/aaaa hh:mm'.\n"
+            "- Se já houver visita marcada, não ofereça novos horários; lembre a data e, se o "
+            "lead quiser mudar, peça o novo dia/horário.\n"
+            "- NUNCA diga que uma visita foi marcada, confirmada ou agendada se 'Visita já marcada' "
+            "for 'não': quem confirma é o sistema, não você."
         )
+        horarios_txt = _lista_horarios(horarios) if horarios else "(não oferecer agora)"
         user = (
             f"Primeira mensagem: {'sim' if primeira else 'não'}\n"
             f"Fora de escopo: {'sim' if fora_de_escopo else 'não'}\n"
             f"Pronto para agendar: {'sim' if pronto_para_agendar else 'não'}\n"
+            f"Visita já marcada: {agendado or 'não'}\n"
+            f"Horários livres do corretor:\n{horarios_txt}\n"
             f"Tipo de busca: {match_busca}\n"
             f"Motivo: {motivo_busca or '(n/a)'}\n"
             f"Perfil: {json.dumps(estado.get('perfil') or {}, ensure_ascii=False)}\n"
@@ -541,6 +757,36 @@ def processar_mensagem(lead_id: str, mensagem: str) -> dict[str, Any]:
 
     memoria.adicionar_mensagem(estado, "lead", mensagem)
 
+    agenda = _tratar_agenda(estado, mensagem)
+    if agenda:
+        memoria.adicionar_mensagem(estado, "agente", agenda["resposta"])
+        qual = score_estado(estado)
+        resumo = montar_resumo(estado)
+        if agenda["evento"]:
+            crm = sincronizar_crm(estado, resumo, evento=agenda["evento"])
+        else:
+            crm = sincronizar_crm(estado, resumo, qual_antes=qual_antes)
+        memoria.salvar(estado)
+        return {
+            "lead_id": lead_id,
+            "resposta": agenda["resposta"],
+            "perfil": estado.get("perfil") or {},
+            "qualificacao": qual,
+            "imoveis": [],
+            "exibir_imoveis": False,
+            "match_busca": "vazio",
+            "motivo_busca": "",
+            "agendamento": _agendamento_publico(estado),
+            "resumo_corretor": resumo,
+            "usou_llm": False,
+            "crm": crm,
+            "fora_de_escopo": False,
+        }
+
+    email = extrair_email(mensagem)
+    if email:
+        perfil_antes["email"] = email
+
     fora = mensagem_fora_de_escopo(mensagem, perfil_antes)
     if fora:
         # Não polui o perfil com sinais falsos; não busca catálogo
@@ -566,6 +812,7 @@ def processar_mensagem(lead_id: str, mensagem: str) -> dict[str, Any]:
             "qualificacao": qual,
             "imoveis": [],
             "exibir_imoveis": False,
+            "agendamento": _agendamento_publico(estado),
             "resumo_corretor": montar_resumo(estado),
             "usou_llm": usou_llm,
             "fora_de_escopo": True,
@@ -595,6 +842,7 @@ def processar_mensagem(lead_id: str, mensagem: str) -> dict[str, Any]:
             "qualificacao": qual,
             "imoveis": [],
             "exibir_imoveis": False,
+            "agendamento": _agendamento_publico(estado),
             "resumo_corretor": montar_resumo(estado),
             "usou_llm": usou_llm,
             "fora_de_escopo": False,
@@ -633,6 +881,12 @@ def processar_mensagem(lead_id: str, mensagem: str) -> dict[str, Any]:
         or match_busca == "aproximado"
     )
 
+    ativo = agendamento_ativo(estado)
+    inicio_ativo = inicio_do(ativo) if ativo else None
+    agendado = formatar_humano(inicio_ativo) if inicio_ativo else ""
+    oferecer = not agendado and (bool(qual.get("pronto_para_agendar")) or _quer_agendar(mensagem))
+    horarios = sugerir_horarios(3) if oferecer else []
+
     resposta_llm = _resposta_llm(
         mensagem,
         estado,
@@ -641,8 +895,13 @@ def processar_mensagem(lead_id: str, mensagem: str) -> dict[str, Any]:
         pronto_para_agendar=bool(qual.get("pronto_para_agendar")),
         match_busca=match_busca,
         motivo_busca=motivo_busca,
+        horarios=horarios,
+        agendado=agendado,
     )
     usou_llm = bool(resposta_llm)
+    if resposta_llm and horarios and _quer_agendar(resposta_llm) and not horarios_no_texto(resposta_llm):
+        # o lead precisa ver horários concretos para conseguir escolher um
+        resposta_llm += "\n\nHorários que posso oferecer:\n" + _lista_horarios(horarios)
     resposta = resposta_llm or _resposta_deterministica(
         mensagem,
         estado,
@@ -652,6 +911,8 @@ def processar_mensagem(lead_id: str, mensagem: str) -> dict[str, Any]:
         mostrar_imoveis=mostrar,
         match_busca=match_busca,
         motivo_busca=motivo_busca,
+        horarios=horarios,
+        agendado=agendado,
     )
 
     memoria.adicionar_mensagem(estado, "agente", resposta)
@@ -669,6 +930,7 @@ def processar_mensagem(lead_id: str, mensagem: str) -> dict[str, Any]:
         "exibir_imoveis": mostrar,
         "match_busca": match_busca if mostrar else "vazio",
         "motivo_busca": motivo_busca if mostrar else "",
+        "agendamento": _agendamento_publico(estado),
         "resumo_corretor": resumo,
         "usou_llm": usou_llm,
         "crm": crm,
@@ -701,7 +963,11 @@ def follow_up(lead_id: str) -> dict[str, Any]:
             "você busca comprar, alugar ou investir?"
         )
 
-    if pergunta:
+    ativo = agendamento_ativo(estado)
+    inicio_ativo = inicio_do(ativo) if ativo else None
+    if inicio_ativo:
+        texto += f" Sua visita segue marcada para {formatar_humano(inicio_ativo)}."
+    elif pergunta:
         texto += f" {pergunta}"
     elif qual.get("pronto_para_agendar"):
         texto += " Se fizer sentido, já posso te passar horários para uma visita."

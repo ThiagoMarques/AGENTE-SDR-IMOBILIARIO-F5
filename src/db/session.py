@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from collections.abc import Generator
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
 import config
@@ -25,6 +25,10 @@ def init_db() -> None:
 
     engine = get_engine()
     Base.metadata.create_all(bind=engine)
+    # create_all não altera tabelas existentes: colunas novas entram por ALTER idempotente.
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE agendamentos ADD COLUMN IF NOT EXISTS inicio TIMESTAMPTZ"))
+        conn.execute(text("ALTER TABLE agendamentos ADD COLUMN IF NOT EXISTS detalhes JSONB"))
 
 
 def get_session() -> Generator[Session, None, None]:

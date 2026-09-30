@@ -6,7 +6,8 @@ Desenho:
   n8n/Zapier, ou um CRM real que aceite webhook). Um `HubSpotCRM`, por
   exemplo, seria outra classe com o mesmo método `enviar`.
 - Envio por EVENTO, não por mensagem: só sincroniza quando algo relevante
-  muda (prioridade, lead pronto para agendar, resumo gerado). Evita tráfego
+  muda (prioridade, lead pronto para agendar, visita agendada/remarcada/
+  cancelada, resumo gerado). Evita tráfego
   e chamadas desnecessárias.
 - Resiliência: falha de rede nunca derruba o atendimento. O payload vai
   para uma fila local (`dados/crm_pendentes.jsonl`) e pode ser reenviado
@@ -27,6 +28,9 @@ import config
 EVENTO_ATUALIZADO = "lead_atualizado"
 EVENTO_QUALIFICADO = "lead_qualificado"
 EVENTO_RESUMO = "resumo_gerado"
+EVENTO_AGENDADO = "visita_agendada"
+EVENTO_REMARCADO = "visita_remarcada"
+EVENTO_CANCELADO = "visita_cancelada"
 
 
 class CRMAdapter(Protocol):

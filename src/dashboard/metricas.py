@@ -20,7 +20,9 @@ def montar_dashboard() -> dict[str, Any]:
         prioridade = q["prioridade"]
         score = q["score"]
         por_prioridade[prioridade] = por_prioridade.get(prioridade, 0) + 1
-        agendamentos += len(c.get("agendamentos") or [])
+        agendamentos += sum(
+            1 for a in c.get("agendamentos") or [] if a.get("status", "agendado") == "agendado"
+        )
         leads_out.append(
             {
                 "lead_id": c.get("lead_id"),

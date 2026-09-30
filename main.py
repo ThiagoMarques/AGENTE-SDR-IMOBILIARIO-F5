@@ -21,6 +21,11 @@ def checar_ambiente() -> None:
     print(f"  LLM: {'configurado' if config.OPENAI_API_KEY else 'ausente (modo determinístico)'}")
     print(f"  modelo: {config.LLM_MODEL}")
     print(f"  CRM: {config.CRM_WEBHOOK_URL or 'desabilitado (defina CRM_WEBHOOK_URL)'}")
+    from src.agenda.calendario import status as status_agenda
+
+    agenda = status_agenda()
+    ativas = [nome for nome, ok in agenda.items() if ok]
+    print(f"  agenda: {', '.join(ativas) if ativas else 'só links/.ics (rode --agenda-auth google|outlook)'}")
     try:
         from src.db.session import init_db
 
@@ -166,6 +171,19 @@ def cmd_crm_reenviar() -> None:
     print(json.dumps(reenviar_pendentes(), ensure_ascii=False))
 
 
+def cmd_agenda_auth(provedor: str) -> None:
+    from src.agenda.calendario import ErroAgenda
+    from src.agenda.oauth import autorizar_google, autorizar_outlook
+
+    try:
+        if provedor == "google":
+            autorizar_google()
+        else:
+            autorizar_outlook()
+    except ErroAgenda as exc:
+        raise SystemExit(str(exc)) from exc
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Agente SDR Imobiliário — Fase 5")
     parser.add_argument("--checar", action="store_true", help="Valida pastas e credenciais")
@@ -178,6 +196,11 @@ def main() -> None:
     parser.add_argument("--crm-servidor", action="store_true", help="Sobe o CRM simulado (FastAPI)")
     parser.add_argument("--crm-porta", type=int, default=8001)
     parser.add_argument("--crm-reenviar", action="store_true", help="Reenvia eventos pendentes ao CRM")
+    parser.add_argument(
+        "--agenda-auth",
+        choices=["google", "outlook"],
+        help="Conecta a agenda do corretor (Google Agenda ou Outlook)",
+    )
     parser.add_argument("--intencao", choices=["compra", "aluguel", "investimento"])
     parser.add_argument("--regiao", type=str)
     parser.add_argument("--quartos", type=int)
@@ -190,6 +213,9 @@ def main() -> None:
         return
     if args.crm_reenviar:
         cmd_crm_reenviar()
+        return
+    if args.agenda_auth:
+        cmd_agenda_auth(args.agenda_auth)
         return
     if args.checar:
         checar_ambiente()

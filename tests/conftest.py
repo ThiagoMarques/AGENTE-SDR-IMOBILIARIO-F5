@@ -15,6 +15,19 @@ def sem_llm(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def agenda_sem_credenciais(monkeypatch, tmp_path):
+    """Nenhum teste fala com Google/Microsoft de verdade nem lê tokens da máquina."""
+    from src.agenda import calendario
+
+    monkeypatch.setattr(config, "AGENDA_TOKENS", tmp_path / "agenda_tokens.json")
+    for nome in ("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REFRESH_TOKEN",
+                 "MS_CLIENT_ID", "MS_CLIENT_SECRET", "MS_REFRESH_TOKEN"):
+        monkeypatch.setattr(config, nome, "")
+    monkeypatch.setattr(config, "CRM_WEBHOOK_URL", "")
+    calendario._ACCESS_TOKENS.clear()
+
+
+@pytest.fixture(autouse=True)
 def memoria_em_ram(monkeypatch):
     """Substitui o Postgres por um dicionário: testes rodam sem banco."""
     import copy

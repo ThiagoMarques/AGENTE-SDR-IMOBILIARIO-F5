@@ -10,7 +10,8 @@ import {
   TextArea,
 } from "@heroui/react";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, Dashboard, Mensagem, Qualificacao } from "../api";
+import { Agendamento, api, Dashboard, Mensagem, Qualificacao } from "../api";
+import { AgendamentoCard } from "../components/AgendamentoCard";
 import { PriorityChip } from "../components/PriorityChip";
 
 type LeadRow = Dashboard["leads"][number];
@@ -29,6 +30,7 @@ export default function ChatPage() {
   const [perfil, setPerfil] = useState<Record<string, unknown>>({});
   const [imoveis, setImoveis] = useState<Record<string, unknown>[]>([]);
   const [matchBusca, setMatchBusca] = useState<string>("vazio");
+  const [agendamento, setAgendamento] = useState<Agendamento | null>(null);
   const [qual, setQual] = useState<Qualificacao | null>(null);
   const [loading, setLoading] = useState(false);
   const [boot, setBoot] = useState(true);
@@ -54,7 +56,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     fimRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [mensagens, imoveis]);
+  }, [mensagens, imoveis, agendamento]);
 
   useEffect(() => {
     let cancel = false;
@@ -77,6 +79,7 @@ export default function ChatPage() {
           );
           setImoveis([]);
           setMatchBusca("vazio");
+          setAgendamento([...(lead.agendamentos || [])].reverse().find((a) => a.status === "agendado") ?? null);
           setErro(null);
         }
       } catch {
@@ -86,6 +89,7 @@ export default function ChatPage() {
           setQual(null);
           setImoveis([]);
           setMatchBusca("vazio");
+          setAgendamento(null);
         }
       } finally {
         if (!cancel) setBoot(false);
@@ -133,6 +137,7 @@ export default function ChatPage() {
       setPerfil(out.perfil || {});
       setImoveis(out.exibir_imoveis === false ? [] : out.imoveis || []);
       setMatchBusca(out.match_busca || "vazio");
+      setAgendamento(out.agendamento ?? null);
       await carregarLista();
     } catch (err) {
       setErro(err instanceof Error ? err.message : "Falha ao enviar");
@@ -165,6 +170,7 @@ export default function ChatPage() {
     setQual(null);
     setImoveis([]);
     setMatchBusca("vazio");
+    setAgendamento(null);
   }
 
   return (
@@ -339,6 +345,7 @@ export default function ChatPage() {
                   </div>
                 </div>
               )}
+              {agendamento && <AgendamentoCard agendamento={agendamento} />}
               {Object.keys(perfil).length > 0 && (
                 <div className="rounded-2xl border border-slate-200 bg-white/90 p-3 text-xs text-slate-600">
                   <span className="font-semibold text-slate-800">Perfil: </span>

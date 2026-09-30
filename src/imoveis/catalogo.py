@@ -235,9 +235,10 @@ def formatar_imovel(imovel: dict[str, Any]) -> str:
     ops = ", ".join(imovel.get("operacao", []))
     area = imovel.get("area_m2")
     unidade_area = "m²" if moeda == "BRL" else "sqft"
+    preco_txt = f"{preco:,.0f}".replace(",", ".")
     return (
         f"{imovel.get('id')} — {imovel.get('endereco') or imovel.get('titulo')} ({ops})\n"
         f"  {imovel.get('cidade')}/{imovel.get('estado')} | "
         f"{imovel.get('quartos')} quartos | {area} {unidade_area} | "
-        f"{moeda} {preco:,.0f}".replace(",", ".")
+        f"{moeda} {preco_txt}"
     )

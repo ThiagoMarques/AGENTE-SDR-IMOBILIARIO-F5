@@ -1,5 +1,7 @@
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
+export const apiUrl = (path: string) => `${API_BASE}${path}`;
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
@@ -25,11 +27,27 @@ export type Mensagem = {
   em?: string;
 };
 
+/** Visita/reunião com atalhos de agenda — src/agenda/scheduler.py:publico */
+export type Agendamento = {
+  indice: number;
+  tipo: "visita" | "reuniao" | string;
+  horario: string;
+  inicio?: string;
+  quando: string;
+  status: "agendado" | "remarcado" | "cancelado" | string;
+  imovel_id?: string | null;
+  imovel_titulo?: string | null;
+  local?: string;
+  convidados: string[];
+  calendarios: Array<{ provedor: "google" | "outlook" | string; status: string; link?: string | null }>;
+  links: { google: string; outlook: string; outlook_365: string; ics: string };
+};
+
 export type Lead = {
   lead_id: string;
   perfil: Record<string, unknown>;
   mensagens: Mensagem[];
-  agendamentos: unknown[];
+  agendamentos: Agendamento[];
   imoveis_sugeridos: string[];
   score?: number;
   prioridade?: string;
@@ -73,7 +91,7 @@ export type ResumoCorretor = {
   objecoes?: string[];
   pontos_atencao?: string[];
   imoveis_sugeridos?: string[];
-  agendamentos?: Array<{ tipo?: string; horario?: string; status?: string }>;
+  agendamentos?: Agendamento[];
   acao_sugerida?: string;
 };
 
@@ -86,6 +104,7 @@ export type ChatResponse = {
   exibir_imoveis?: boolean;
   match_busca?: "exato" | "aproximado" | "vazio" | string;
   motivo_busca?: string;
+  agendamento?: Agendamento | null;
   fora_de_escopo?: boolean;
   usou_llm: boolean;
 };

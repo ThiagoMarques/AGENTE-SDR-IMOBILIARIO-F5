@@ -32,6 +32,7 @@ ROTULOS = {
     "urgencia": "Urgência",
     "retorno_esperado": "Retorno esperado",
     "perfil": "Perfil de investidor",
+    "email": "E-mail",
 }
 
 NOMES_CRITERIOS = {
@@ -138,8 +139,9 @@ def sinopse_regras(estado: dict[str, Any], qual: dict[str, Any]) -> str:
 
 
 def _acao(qual: dict[str, Any], estado: dict[str, Any]) -> str:
-    if estado.get("agendamentos"):
-        return "Confirmar reunião/visita com o corretor responsável."
+    ativos = [a for a in estado.get("agendamentos") or [] if a.get("status", "agendado") == "agendado"]
+    if ativos:
+        return f"Visita marcada para {ativos[-1].get('horario')}: confirmar com o corretor responsável."
     if qual.get("encaminhamento") != "corretor" and qual.get("pronto_para_agendar"):
         return f"Lead investidor qualificado: agendar conversa com {qual['encaminhamento']}."
     if qual.get("pronto_para_agendar"):
