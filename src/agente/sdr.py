@@ -441,11 +441,15 @@ def _resposta_deterministica(
                 perfil=perfil,
             )
         )
-    elif match_busca == "vazio" and pode_sugerir_imoveis(perfil):
+    elif (
+    match_busca == "vazio"
+    and not campos_faltantes(perfil)
+    and pode_sugerir_imoveis(perfil)
+    ):
         partes.append(
             "Não tenho imóvel com esse filtro no estoque agora. "
             "Me diga outra região ou quantidade de quartos que eu busco de novo."
-        )
+    )
 
     if pergunta and not (mostrar_imoveis and sugestoes):
         partes.append(pergunta)
@@ -475,6 +479,8 @@ def _resposta_llm(
     pronto_para_agendar: bool = False,
     match_busca: str = "exato",
     motivo_busca: str = "",
+    qualificando: bool = False,
+    proxima: str | None = None,
 ) -> str | None:
     if not config.OPENAI_API_KEY:
         return None
@@ -501,13 +507,19 @@ def _resposta_llm(
             "- UMA pergunta por vez.\n"
             "- NUNCA invente imóveis, quartos, preços, bairros ou tipologias.\n"
             "- Só cite números que aparecem na lista de imóveis/fatos fornecida.\n"
-            "- Se a lista estiver vazia: diga que não tem esse filtro e peça outro "
+            "- Se a lista estiver vazia E a busca já tiver sido realizada: "
+            "diga que não encontrou esse filtro e peça outro. "
+            "Se estiver qualificando, ignore a lista vazia e faça apenas a próxima pergunta.\n"
             "(região ou quartos). NÃO sugira '7, 8 ou 9 quartos' se isso não estiver na lista.\n"
             "- Se match for aproximado: diga em 1 frase que não tem o exato, mostre "
             "o que TEM (só da lista) e pergunte se quer ver/ajustar.\n"
             "- Proibido jargão: match, lead score, perfil completo, estoque filtrado.\n"
             "- Não se apresente de novo se a conversa já começou.\n"
-            "- Fora de escopo: recuse e volte para imóveis."
+            "- Fora de escopo: recuse e volte para imóveis.\n"
+            "- Durante a qualificação, NÃO apresente imóveis.\n"
+            "- Durante a qualificação, faça SOMENTE a próxima pergunta indicada.\n"
+            "- Não faça duas perguntas na mesma mensagem.\n"
+            "- Se a próxima pergunta estiver vazia, responda naturalmente sem inventar uma nova etapa do funil.\n"
         )
         user = (
             f"Primeira mensagem: {'sim' if primeira else 'não'}\n"
@@ -518,7 +530,9 @@ def _resposta_llm(
             f"Perfil: {json.dumps(estado.get('perfil') or {}, ensure_ascii=False)}\n"
             f"Histórico:\n{hist_txt}\n"
             f"Imóveis (única fonte de verdade):\n{catalogo_txt}\n\n"
-            f"Mensagem do lead: {mensagem}"
+            f"Mensagem do lead: {mensagem}\n"
+            f"Qualificando lead: {'sim' if qualificando else 'não'}\n"
+            f"Próxima pergunta da qualificação: {proxima or '(nenhuma)'}\n"
         )
         resp = client.chat.completions.create(
             model=config.LLM_MODEL,
@@ -542,12 +556,15 @@ def processar_mensagem(lead_id: str, mensagem: str) -> dict[str, Any]:
     memoria.adicionar_mensagem(estado, "lead", mensagem)
 
     fora = mensagem_fora_de_escopo(mensagem, perfil_antes)
+
     if fora:
         # Não polui o perfil com sinais falsos; não busca catálogo
         perfil = perfil_antes
         estado["perfil"] = perfil
         qual = score_estado(estado)
+
         sugestoes: list[dict[str, Any]] = []
+
         resposta_llm = _resposta_llm(
             mensagem,
             estado,
@@ -555,10 +572,21 @@ def processar_mensagem(lead_id: str, mensagem: str) -> dict[str, Any]:
             primeira=primeira,
             fora_de_escopo=True,
         )
+
         usou_llm = bool(resposta_llm)
-        resposta = resposta_llm or _resposta_fora_de_escopo(primeira=primeira)
-        memoria.adicionar_mensagem(estado, "agente", resposta)
+
+        resposta = resposta_llm or _resposta_fora_de_escopo(
+            primeira=primeira
+        )
+
+        memoria.adicionar_mensagem(
+            estado,
+            "agente",
+            resposta,
+        )
+
         memoria.salvar(estado)
+
         return {
             "lead_id": lead_id,
             "resposta": resposta,
@@ -576,18 +604,25 @@ def processar_mensagem(lead_id: str, mensagem: str) -> dict[str, Any]:
         perfil = dict(perfil_antes)
         estado["perfil"] = perfil
         qual = score_estado(estado)
-        resposta_llm = _resposta_llm(mensagem, estado, [], primeira=primeira)
-        usou_llm = bool(resposta_llm)
-        resposta = resposta_llm or _resposta_deterministica(
+
+        resposta = _resposta_deterministica(
             mensagem,
             estado,
             qual,
             [],
             perfil_antes=perfil_antes,
             mostrar_imoveis=False,
+            match_busca="nao_realizada",
         )
-        memoria.adicionar_mensagem(estado, "agente", resposta)
+
+        memoria.adicionar_mensagem(
+            estado,
+            "agente",
+            resposta,
+        )
+
         memoria.salvar(estado)
+
         return {
             "lead_id": lead_id,
             "resposta": resposta,
@@ -595,54 +630,108 @@ def processar_mensagem(lead_id: str, mensagem: str) -> dict[str, Any]:
             "qualificacao": qual,
             "imoveis": [],
             "exibir_imoveis": False,
+            "match_busca": "nao_realizada",
+            "motivo_busca": "",
             "resumo_corretor": montar_resumo(estado),
-            "usou_llm": usou_llm,
+            "usou_llm": False,
             "fora_de_escopo": False,
         }
 
-    perfil = extrair_sinais(mensagem, perfil_antes)
-    # LLM complementa/corrige a regex (se houver OPENAI_API_KEY); sem chave, nada muda.
-    perfil = mesclar_perfil(
-        perfil, extrair_perfil_llm(mensagem, perfil, estado.get("mensagens"))
+    perfil = extrair_sinais(
+        mensagem,
+        perfil_antes,
     )
+
+    # LLM complementa/corrige a regex
+    # (se houver OPENAI_API_KEY); sem chave, nada muda.
+    perfil = mesclar_perfil(
+        perfil,
+        extrair_perfil_llm(
+            mensagem,
+            perfil,
+            estado.get("mensagens"),
+        ),
+    )
+
     estado["perfil"] = perfil
+
     qual = score_estado(estado)
 
+    faltantes = campos_faltantes(perfil)
+    qualificando = bool(faltantes)
+    proxima = proxima_pergunta(perfil)
+
     sugestoes: list[dict[str, Any]] = []
-    match_busca = "vazio"
+    match_busca = "nao_realizada"
     motivo_busca = ""
-    exibir = pode_sugerir_imoveis(perfil)
-    if exibir:
-        preco_max = perfil.get("faixa_preco") or perfil.get("ticket")
+    mostrar = False
+
+    if (
+        not qualificando
+        and pode_sugerir_imoveis(perfil)
+    ):
+        preco_max = (
+            perfil.get("faixa_preco")
+            or perfil.get("ticket")
+        )
+
         quartos = perfil.get("quartos")
+
         resultado = buscar_resultado(
             intencao=perfil.get("intencao"),
             regiao=perfil.get("regiao"),
-            quartos_min=int(quartos) if quartos is not None else None,
-            preco_max=float(preco_max) if preco_max is not None else None,
+            quartos_min=(
+                int(quartos)
+                if quartos is not None
+                else None
+            ),
+            preco_max=(
+                float(preco_max)
+                if preco_max is not None
+                else None
+            ),
         )
-        sugestoes = resultado.get("imoveis") or []
-        match_busca = str(resultado.get("match") or "vazio")
-        motivo_busca = str(resultado.get("motivo") or "")
-    estado["imoveis_sugeridos"] = [s["id"] for s in sugestoes]
 
-    # Cards quando há filtro mínimo; inclui match aproximado (sugestões próximas)
-    mostrar = exibir and bool(sugestoes) and (
-        perfil.get("quartos") is not None
-        or perfil.get("faixa_preco") is not None
-        or match_busca == "aproximado"
-    )
+        sugestoes = resultado.get("imoveis") or []
+
+        match_busca = str(
+            resultado.get("match") or "vazio"
+        )
+
+        motivo_busca = str(
+            resultado.get("motivo") or ""
+        )
+
+        mostrar = bool(sugestoes) and (
+            perfil.get("quartos") is not None
+            or perfil.get("faixa_preco") is not None
+            or match_busca == "aproximado"
+        )
 
     resposta_llm = _resposta_llm(
         mensagem,
         estado,
         sugestoes if mostrar else [],
         primeira=primeira,
-        pronto_para_agendar=bool(qual.get("pronto_para_agendar")),
-        match_busca=match_busca,
-        motivo_busca=motivo_busca,
+        pronto_para_agendar=bool(
+            qual.get("pronto_para_agendar")
+        ),
+        match_busca=(
+            "n/a"
+            if qualificando
+            else match_busca
+        ),
+        motivo_busca=(
+            ""
+            if qualificando
+            else motivo_busca
+        ),
+        qualificando=qualificando,
+        proxima=proxima,
     )
+
     usou_llm = bool(resposta_llm)
+
     resposta = resposta_llm or _resposta_deterministica(
         mensagem,
         estado,
@@ -654,10 +743,21 @@ def processar_mensagem(lead_id: str, mensagem: str) -> dict[str, Any]:
         motivo_busca=motivo_busca,
     )
 
-    memoria.adicionar_mensagem(estado, "agente", resposta)
+    memoria.adicionar_mensagem(
+        estado,
+        "agente",
+        resposta,
+    )
+
     resumo = montar_resumo(estado)
+
     # Envia ao CRM só se prioridade/prontidão mudou nesta mensagem
-    crm = sincronizar_crm(estado, resumo, qual_antes=qual_antes)
+    crm = sincronizar_crm(
+        estado,
+        resumo,
+        qual_antes=qual_antes,
+    )
+
     memoria.salvar(estado)
 
     return {
@@ -667,8 +767,16 @@ def processar_mensagem(lead_id: str, mensagem: str) -> dict[str, Any]:
         "qualificacao": qual,
         "imoveis": sugestoes if mostrar else [],
         "exibir_imoveis": mostrar,
-        "match_busca": match_busca if mostrar else "vazio",
-        "motivo_busca": motivo_busca if mostrar else "",
+        "match_busca": (
+            "nao_realizada"
+            if qualificando
+            else match_busca
+        ),
+        "motivo_busca": (
+            motivo_busca
+            if mostrar
+            else ""
+        ),
         "resumo_corretor": resumo,
         "usou_llm": usou_llm,
         "crm": crm,
