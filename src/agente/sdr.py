@@ -1,152 +1,47 @@
-"""Agente SDR: intenção, qualificação, busca de imóveis e resposta (LLM opcional)."""
+"""Agente SDR imobiliário orientado a estado e mensagens humanas.
+
+Esta versão evita tratar a conversa como um formulário rígido.
+
+Características:
+- usuário pode responder fora de ordem;
+- pode fornecer vários dados na mesma mensagem;
+- pode corrigir dados anteriores;
+- pode mudar de ideia;
+- tolera erros de digitação em intenção e região;
+- perguntas fora de escopo não apagam o contexto;
+- dúvidas imobiliárias não quebram a qualificação;
+- LLM é opcional: Python controla estado, fluxo e busca.
+"""
+
 from __future__ import annotations
 
-import json
 import re
 from typing import Any
 
-import config
 from src.agenda.scheduler import sugerir_horarios
+from src.crm.cliente import sincronizar as sincronizar_crm
 from src.imoveis.catalogo import buscar_resultado, formatar_imovel
 from src.memoria import conversa as memoria
-from src.crm.cliente import sincronizar as sincronizar_crm
-from src.qualificacao.extracao_llm import extrair_perfil_llm, mesclar_perfil
-from src.qualificacao.lead import campos_faltantes, proxima_pergunta, score_estado
+from src.qualificacao.fluxo_conversa import (
+    pergunta_para,
+    proximo_campo,
+    qualificacao_concluida,
+)
+from src.qualificacao.interpretador import (
+    interpretar_mensagem,
+    normalizar_texto,
+    reconciliar_perfil,
+)
+from src.qualificacao.lead import score_estado
 from src.resumo.corretor import montar_resumo
-
-_REGIOES = {
-    "zona sul": "zona sul",
-    "zona oeste": "zona oeste",
-    "zona norte": "zona norte",
-    "zona leste": "zona leste",
-    "asa sul": "asa sul",
-    "asa norte": "asa norte",
-    "lago sul": "lago sul",
-    "lago norte": "lago norte",
-    "centro": "centro",
-    "moema": "moema",
-    "pinheiros": "pinheiros",
-    "vila mariana": "vila mariana",
-    "itaim": "itaim bibi",
-    "brooklin": "brooklin",
-    "jardins": "jardins",
-}
-
-# Temas fora do escopo SDR (evitar “anomalias” / respostas desalinhadas)
-_FORA_ESCOPO = (
-    "previsão do tempo",
-    "previsao do tempo",
-    "previsão",
-    "previsao",
-    "clima",
-    "temperatura",
-    "meteorolog",
-    "futebol",
-    "jogo do",
-    "política",
-    "politica",
-    "eleição",
-    "eleicao",
-    "piada",
-    "receita de",
-    "horóscopo",
-    "horoscopo",
-    "bitcoin",
-    "criptomoeda",
-    "chatgpt",
-    "quem é você",
-    "quem e voce",
-)
-
-_IMOB_HINT = (
-    "imóvel",
-    "imovel",
-    "apartamento",
-    "apto",
-    "casa",
-    "cobertura",
-    "alugar",
-    "aluguel",
-    "comprar",
-    "compra",
-    "investir",
-    "investimento",
-    "quarto",
-    "quartos",
-    "metragem",
-    "visita",
-    "corretor",
-    "orçamento",
-    "orcamento",
-    "bairro",
-    "região",
-    "regiao",
-)
-
-
-def mensagem_fora_de_escopo(texto: str, perfil: dict[str, Any] | None = None) -> bool:
-    """True quando a mensagem não é sobre imóveis / qualificação."""
-    t = texto.lower().strip()
-    if not t:
-        return False
-    if _so_saudacao(texto) or _quer_agendar(texto):
-        return False
-    # Respostas curtas de funil (números, mil, urgência)
-    if re.fullmatch(r"[\d\s\.r$milatéateqtosquartos]*", t.replace("ú", "u")):
-        return False
-    if re.fullmatch(r"(curto|médio|medio|longo|alta|baixa|sem pressa)", t):
-        return False
-    if detectar_intencao(texto, perfil):
-        return False
-    if any(r in t for r in _REGIOES):
-        return False
-    if any(h in t for h in _IMOB_HINT):
-        return False
-    if any(p in t for p in _FORA_ESCOPO):
-        return True
-    # Pergunta genérica sem sinal imobiliário
-    if "?" in t or t.startswith(("fale ", "me fala", "me diga", "o que ", "como ", "por que", "porque")):
-        return True
-    return False
-
-
-def pode_sugerir_imoveis(perfil: dict[str, Any]) -> bool:
-    """Só sugere catálogo com intenção + ao menos um filtro concreto."""
-    if not perfil.get("intencao"):
-        return False
-    return (
-        bool(perfil.get("regiao"))
-        or perfil.get("quartos") is not None
-        or perfil.get("faixa_preco") is not None
-        or perfil.get("ticket") is not None
-    )
-
-
-def detectar_intencao(texto: str, perfil_atual: dict[str, Any] | None = None) -> str | None:
-    t = texto.lower()
-    if any(p in t for p in ("investir", "investimento", "renda", "yield", "retorno", "ticket")):
-        return "investimento"
-    if (perfil_atual or {}).get("intencao") == "investimento" and any(
-        p in t for p in ("locação", "locacao", "aluguel", "%")
-    ):
-        return "investimento"
-    if any(p in t for p in ("alugar", "aluguel", "locação", "locacao")):
-        return "aluguel"
-    # Verbos claros de compra
-    if any(p in t for p in ("comprar", "compra", "aquisição", "aquisicao")):
-        return "compra"
-    # Tipo de imóvel sem verbo → assume compra (cenário típico do desafio)
-    if any(p in t for p in ("apartamento", "casa", "cobertura", "imóvel", "imovel", "apto")):
-        return "compra"
-    return None
 
 
 def _so_saudacao(texto: str) -> bool:
-    t = texto.lower().strip()
+    t = normalizar_texto(texto)
     t = re.sub(r"[!?.…,]+", "", t).strip()
+
     return t in {
         "oi",
-        "olá",
         "ola",
         "oie",
         "hey",
@@ -155,7 +50,6 @@ def _so_saudacao(texto: str) -> bool:
         "boa tarde",
         "boa noite",
         "eai",
-        "e aí",
         "e ai",
         "tudo bem",
         "tudo bom",
@@ -163,21 +57,19 @@ def _so_saudacao(texto: str) -> bool:
 
 
 def _quer_agendar(texto: str) -> bool:
-    t = texto.lower()
+    t = normalizar_texto(texto)
+
     return any(
-        p in t
-        for p in (
+        termo in t
+        for termo in (
             "agendar",
             "agendamento",
-            "marcar",
-            "visita",
-            "reunião",
+            "marcar visita",
+            "quero visitar",
+            "quero ver o imovel",
+            "quero ver o apartamento",
             "reuniao",
-            "horário",
-            "horario",
-            "pode ser o",
-            "quero ver",
-            "conhecer o imóvel",
+            "falar com corretor",
             "conhecer o imovel",
         )
     )
@@ -185,17 +77,18 @@ def _quer_agendar(texto: str) -> bool:
 
 def _fmt_moeda(valor: float) -> str:
     v = float(valor)
+
     if v >= 1_000_000:
         mi = v / 1_000_000
-        if abs(mi - round(mi, 1)) < 1e-6:
-            txt = f"{mi:.1f}".rstrip("0").rstrip(".")
-            return f"R$ {txt} mi"
-        return f"R$ {mi:.2f} mi".replace(".", ",")
+        txt = f"{mi:.1f}".rstrip("0").rstrip(".")
+        return f"R$ {txt} mi"
+
     if v >= 1000:
         mil = v / 1000
-        if abs(mil - round(mil)) < 1e-6:
+
+        if abs(mil - round(mil)) < 1e-9:
             return f"R$ {int(round(mil))} mil"
-        return f"R$ {v:,.0f}".replace(",", ".")
+
     return f"R$ {v:,.0f}".replace(",", ".")
 
 
@@ -207,551 +100,301 @@ def _label_intencao(intencao: str) -> str:
     }.get(intencao, intencao)
 
 
-def extrair_sinais(texto: str, perfil: dict[str, Any]) -> dict[str, Any]:
-    """Heurísticas leves para enriquecer o perfil a partir da mensagem."""
-    t = texto.lower().strip()
-    novo = dict(perfil)
-    faltantes = campos_faltantes(perfil)
-
-    intencao = detectar_intencao(texto, perfil)
-    if intencao:
-        novo["intencao"] = intencao
-
-    # Regiões (chaves mais longas primeiro)
-    for chave, valor in sorted(_REGIOES.items(), key=lambda x: -len(x[0])):
-        if chave in t:
-            novo["regiao"] = valor
-            break
-
-    m_quartos = re.findall(r"(\d+)\s*(?:quartos?|dorms?|dormitórios?|dormitorios?)", t)
-    if not m_quartos:
-        m_range = re.search(r"(\d+)\s*ou\s*(\d+)\s*(?:quartos?|dorms?|dormitórios?|dormitorios?)?", t)
-        if m_range:
-            novo["quartos"] = min(int(m_range.group(1)), int(m_range.group(2)))
-    else:
-        nums = [int(x) for x in m_quartos]
-        m_range = re.search(r"(\d+)\s*ou\s*(\d+)", t)
-        if m_range and "ou" in t:
-            novo["quartos"] = min(int(m_range.group(1)), int(m_range.group(2)))
-        else:
-            novo["quartos"] = nums[0]
-
-    # Resposta curta só com número quando a próxima pergunta era quartos
-    if "quartos" not in novo and "quartos" in faltantes:
-        m_so_num = re.fullmatch(r"(\d+)\s*(?:q|qtos?)?", t)
-        if m_so_num:
-            novo["quartos"] = int(m_so_num.group(1))
-
-    m_mil = re.search(
-        r"(?:até|ate|max(?:imo)?|no máximo|ticket(?:\s*de)?)\s*r?\$?\s*([\d\.]+)\s*mil\b",
-        t,
-    )
-    if not m_mil:
-        m_mil = re.search(r"([\d\.]+)\s*mil\b", t)
-    if m_mil:
-        novo["faixa_preco"] = float(m_mil.group(1).replace(".", "")) * 1000
-        if "ticket" in t:
-            novo["ticket"] = novo["faixa_preco"]
-    else:
-        m_preco = re.search(
-            r"(?:até|ate|max(?:imo)?|no máximo|ticket(?:\s*de)?)\s*r?\$?\s*([\d\.]+)",
-            t,
-        )
-        if m_preco:
-            valor = float(m_preco.group(1).replace(".", ""))
-            novo["faixa_preco"] = valor
-            if "ticket" in t:
-                novo["ticket"] = valor
-
-    # Orçamento curto: "800 mil", "até 500 mil", "500000"
-    if "faixa_preco" not in novo and "faixa_preco" in faltantes:
-        m_num = re.fullmatch(r"r?\$?\s*([\d\.]+)\s*(mil)?", t)
-        if m_num:
-            valor = float(m_num.group(1).replace(".", ""))
-            if m_num.group(2):
-                valor *= 1000
-            novo["faixa_preco"] = valor
-
-    if any(p in t for p in ("urgente", "essa semana", "o quanto antes", "agora", "curto prazo")):
-        novo["urgencia"] = "alta"
-    elif any(p in t for p in ("sem pressa", "só olhando", "pesquisando", "médio prazo", "medio prazo")):
-        novo["urgencia"] = "baixa"
-    elif "urgencia" in faltantes and re.fullmatch(r"(curto|médio|medio|longo)", t):
-        mapa = {"curto": "alta", "médio": "media", "medio": "media", "longo": "baixa"}
-        novo["urgencia"] = mapa.get(t, "media")
-
-    m_ret = re.search(r"(\d+[.,]?\d*)\s*%", t)
-    if m_ret and (novo.get("intencao") == "investimento" or "retorno" in t or "ao ano" in t):
-        novo["retorno_esperado"] = m_ret.group(1).replace(",", ".") + "% a.a."
-
-    if novo.get("intencao") == "investimento" and any(
-        p in t for p in ("renda", "locação", "locacao", "aluguel")
-    ):
-        novo["perfil"] = "renda recorrente"
-
-    return novo
-
-
-def _novos_campos(antes: dict[str, Any], depois: dict[str, Any]) -> dict[str, Any]:
-    out = {}
-    for k, v in depois.items():
-        if v is not None and v != "" and antes.get(k) != v:
-            out[k] = v
-    return out
-
-
-def _frase_ack(novos: dict[str, Any]) -> str | None:
-    if not novos:
-        return None
-    pedacos: list[str] = []
-    if "intencao" in novos:
-        pedacos.append(f"que você quer {_label_intencao(str(novos['intencao']))}")
-    if "regiao" in novos:
-        pedacos.append(f"foco em {novos['regiao']}")
-    if "quartos" in novos:
-        q = int(novos["quartos"])
-        pedacos.append(f"{q} quarto" + ("s" if q != 1 else ""))
-    if "faixa_preco" in novos:
-        pedacos.append(f"orçamento até {_fmt_moeda(float(novos['faixa_preco']))}")
-    if "urgencia" in novos:
-        urg = str(novos["urgencia"])
-        mapa = {"alta": "prazo mais curto", "media": "prazo médio", "baixa": "sem pressa"}
-        pedacos.append(mapa.get(urg, f"urgência {urg}"))
-    if "ticket" in novos and "faixa_preco" not in novos:
-        pedacos.append(f"ticket de {_fmt_moeda(float(novos['ticket']))}")
-    if "retorno_esperado" in novos:
-        pedacos.append(f"retorno em torno de {novos['retorno_esperado']}")
-    if "perfil" in novos:
-        pedacos.append(f"perfil {novos['perfil']}")
-    if not pedacos:
-        return None
-    if len(pedacos) == 1:
-        return f"Perfeito, anotei {pedacos[0]}."
-    return "Perfeito, anotei " + ", ".join(pedacos[:-1]) + f" e {pedacos[-1]}."
-
-
-def _primeira_interacao(estado: dict[str, Any]) -> bool:
-    """True se ainda não houve resposta do agente nesta conversa."""
-    return not any(m.get("papel") == "agente" for m in (estado.get("mensagens") or []))
-
-
-def _resposta_fora_de_escopo(*, primeira: bool) -> str:
-    if primeira:
-        return (
-            "Oi! Eu ajudo com compra, aluguel e investimento em imóveis. "
-            "Sobre outros assuntos (clima, esportes etc.) não consigo ajudar por aqui — "
-            "mas se quiser, me diga o que você busca e em qual região."
-        )
-    return (
-        "Nesse canal eu cuido só de imóveis (compra, aluguel ou investimento). "
-        "Se quiser, a gente retoma: comprar, alugar ou investir — e em qual região?"
+def _controle(estado: dict[str, Any]) -> dict[str, Any]:
+    return estado.setdefault(
+        "controle_sdr",
+        {
+            "campo_aguardando": None,
+            "ultimo_campo_preenchido": None,
+        },
     )
 
 
-def _oferecer_agenda(sugestoes: list[dict[str, Any]]) -> str:
-    horarios = sugerir_horarios(3)
-    linhas = [
-        "Acho que já tenho o essencial do seu perfil.",
-        "Que tal marcarmos uma conversa rápida ou uma visita com um corretor?",
-        "Horários que posso oferecer:",
+def _campo_principal_alterado(
+    alteracoes: dict[str, tuple[Any, Any]],
+) -> str | None:
+    prioridade = (
+        "intencao",
+        "regiao",
+        "faixa_preco",
+        "ticket",
+        "quartos",
+        "urgencia",
+        "perfil",
+        "retorno_esperado",
+        "tipo_imovel",
+    )
+
+    encontrados = [
+        campo
+        for campo in prioridade
+        if campo in alteracoes
+        and not campo.endswith("_flexivel")
     ]
-    for h in horarios:
-        linhas.append(f"• {h}")
-    linhas.append("Qual desses te encaixa melhor? Se preferir outro dia/horário, me fala.")
-    if sugestoes:
-        linhas.insert(
-            1,
-            "Posso já alinhar a visita em cima das opções que separamos.",
-        )
-    return "\n".join(linhas)
+
+    return encontrados[-1] if encontrados else None
 
 
-def _bloco_imoveis(
-    sugestoes: list[dict[str, Any]],
-    *,
-    match: str,
-    motivo: str,
-    perfil: dict[str, Any],
+def _descricao_alteracoes(
+    alteracoes: dict[str, tuple[Any, Any]],
 ) -> list[str]:
-    """Frases diretas ao apresentar catálogo (exato vs próximo)."""
-    if not sugestoes:
-        return []
     partes: list[str] = []
-    quartos = perfil.get("quartos")
 
-    if match == "aproximado":
-        if motivo:
-            partes.append(f"Direto: {motivo}.")
-        elif quartos is not None:
-            partes.append(
-                f"Não tenho imóvel com {quartos} quarto"
-                + ("s" if int(quartos) != 1 else "")
-                + " no estoque agora. O mais próximo que tenho:"
-            )
-        else:
-            partes.append("Não achei o filtro exato. O mais próximo que tenho:")
-    else:
-        partes.append("Separei estas opções:")
+    if "intencao" in alteracoes:
+        _, novo = alteracoes["intencao"]
 
-    for im in sugestoes[:3]:
-        partes.append(formatar_imovel(im))
+        if novo:
+            partes.append(f"buscar para {_label_intencao(str(novo))}")
 
-    partes.append("Quer ver alguma dessas ou ajustar o filtro?")
+    if "regiao" in alteracoes:
+        _, novo = alteracoes["regiao"]
+
+        if novo:
+            partes.append(f"região {str(novo).title()}")
+        elif alteracoes.get("regiao_flexivel"):
+            partes.append("região flexível")
+
+    if "faixa_preco" in alteracoes:
+        _, novo = alteracoes["faixa_preco"]
+
+        if novo is not None:
+            partes.append(f"até {_fmt_moeda(float(novo))}")
+        elif alteracoes.get("faixa_preco_flexivel"):
+            partes.append("valor flexível")
+
+    if "ticket" in alteracoes:
+        _, novo = alteracoes["ticket"]
+
+        if novo is not None:
+            partes.append(f"ticket de {_fmt_moeda(float(novo))}")
+
+    if "quartos" in alteracoes:
+        _, novo = alteracoes["quartos"]
+
+        if novo is not None:
+            q = int(novo)
+            partes.append(f"{q} quarto" + ("s" if q != 1 else ""))
+        elif alteracoes.get("quartos_flexivel"):
+            partes.append("quantidade de quartos flexível")
+
+    if "urgencia" in alteracoes:
+        _, novo = alteracoes["urgencia"]
+        mapa = {
+            "alta": "prazo curto",
+            "media": "prazo médio",
+            "baixa": "sem pressa",
+            "indefinida": "prazo ainda em aberto",
+        }
+
+        if novo:
+            partes.append(mapa.get(str(novo), str(novo)))
+
+    if "tipo_imovel" in alteracoes:
+        _, novo = alteracoes["tipo_imovel"]
+
+        if novo:
+            partes.append(str(novo))
+
+    if "perfil" in alteracoes:
+        _, novo = alteracoes["perfil"]
+
+        if novo:
+            partes.append(f"foco em {novo}")
+
+    if "retorno_esperado" in alteracoes:
+        _, novo = alteracoes["retorno_esperado"]
+
+        if novo:
+            partes.append(f"retorno esperado de {novo}")
+
     return partes
 
 
-def _resposta_deterministica(
-    mensagem: str,
-    estado: dict[str, Any],
-    qual: dict[str, Any],
-    sugestoes: list[dict[str, Any]],
+def _ack_alteracoes(
+    alteracoes: dict[str, tuple[Any, Any]],
     *,
-    perfil_antes: dict[str, Any],
-    mostrar_imoveis: bool,
-    match_busca: str = "exato",
-    motivo_busca: str = "",
-) -> str:
-    perfil = estado.get("perfil") or {}
-    partes: list[str] = []
-    primeira = _primeira_interacao(estado)
-    saudacao = _so_saudacao(mensagem)
-
-    if primeira:
-        if saudacao:
-            partes.append(
-                "Oi! Sou o assistente da imobiliária. Te ajudo a achar o imóvel "
-                "e, se fizer sentido, marco visita com um corretor."
-            )
-        else:
-            partes.append("Oi! Vou te ajudar a encontrar o que você busca.")
-
-    novos = _novos_campos(perfil_antes, perfil)
-    ack = _frase_ack(novos)
-    if ack:
-        partes.append(ack)
-
-    pergunta = proxima_pergunta(perfil)
-
-    if mostrar_imoveis and sugestoes:
-        partes.extend(
-            _bloco_imoveis(
-                sugestoes,
-                match=match_busca,
-                motivo=motivo_busca,
-                perfil=perfil,
-            )
-        )
-    elif (
-    match_busca == "vazio"
-    and not campos_faltantes(perfil)
-    and pode_sugerir_imoveis(perfil)
-    ):
-        partes.append(
-            "Não tenho imóvel com esse filtro no estoque agora. "
-            "Me diga outra região ou quantidade de quartos que eu busco de novo."
-    )
-
-    if pergunta and not (mostrar_imoveis and sugestoes):
-        partes.append(pergunta)
-    elif qual.get("pronto_para_agendar") or _quer_agendar(mensagem):
-        if not (mostrar_imoveis and sugestoes):
-            partes.append(_oferecer_agenda([]))
-        else:
-            partes.append(_oferecer_agenda(sugestoes))
-    elif not (mostrar_imoveis and sugestoes) and not pergunta:
-        partes.append("Quer que eu ajuste a busca ou já te conecte com um corretor?")
-
-    limpas: list[str] = []
-    for p in partes:
-        if not p:
-            continue
-        limpas.append(p)
-    return "\n\n".join(limpas)
-
-
-def _resposta_llm(
-    mensagem: str,
-    estado: dict[str, Any],
-    sugestoes: list[dict[str, Any]],
-    *,
-    primeira: bool,
-    fora_de_escopo: bool = False,
-    pronto_para_agendar: bool = False,
-    match_busca: str = "exato",
-    motivo_busca: str = "",
-    qualificando: bool = False,
-    proxima: str | None = None,
+    correcao: bool,
 ) -> str | None:
-    if not config.OPENAI_API_KEY:
-        return None
-    try:
-        from openai import OpenAI
+    descricoes = _descricao_alteracoes(alteracoes)
 
-        client = OpenAI(api_key=config.OPENAI_API_KEY)
-        catalogo_txt = "\n".join(formatar_imovel(i) for i in sugestoes) or "(lista vazia — NÃO invente imóveis)"
-        if sugestoes:
-            fatos = []
-            for i in sugestoes[:3]:
-                fatos.append(
-                    f"- id={i.get('id')} quartos={i.get('quartos')} "
-                    f"regiao={i.get('regiao')} preco={i.get('preco')} "
-                    f"motivo={i.get('match_motivo') or '-'}"
-                )
-            catalogo_txt += "\nFatos (use SOMENTE estes números):\n" + "\n".join(fatos)
-        historico = (estado.get("mensagens") or [])[-6:]
-        hist_txt = "\n".join(f"{m.get('papel')}: {m.get('texto')}" for m in historico)
-        system = (
-            "Você é um SDR imobiliário brasileiro no WhatsApp: direto, claro e humano.\n"
-            "REGRAS DURAS:\n"
-            "- Seja objetivo: 2–5 frases curtas. Sem enrolação.\n"
-            "- UMA pergunta por vez.\n"
-            "- NUNCA invente imóveis, quartos, preços, bairros ou tipologias.\n"
-            "- Só cite números que aparecem na lista de imóveis/fatos fornecida.\n"
-            "- Se a lista estiver vazia E a busca já tiver sido realizada: "
-            "diga que não encontrou esse filtro e peça outro. "
-            "Se estiver qualificando, ignore a lista vazia e faça apenas a próxima pergunta.\n"
-            "(região ou quartos). NÃO sugira '7, 8 ou 9 quartos' se isso não estiver na lista.\n"
-            "- Se match for aproximado: diga em 1 frase que não tem o exato, mostre "
-            "o que TEM (só da lista) e pergunte se quer ver/ajustar.\n"
-            "- Proibido jargão: match, lead score, perfil completo, estoque filtrado.\n"
-            "- Não se apresente de novo se a conversa já começou.\n"
-            "- Fora de escopo: recuse e volte para imóveis.\n"
-            "- Durante a qualificação, NÃO apresente imóveis.\n"
-            "- Durante a qualificação, faça SOMENTE a próxima pergunta indicada.\n"
-            "- Não faça duas perguntas na mesma mensagem.\n"
-            "- Se a próxima pergunta estiver vazia, responda naturalmente sem inventar uma nova etapa do funil.\n"
-        )
-        user = (
-            f"Primeira mensagem: {'sim' if primeira else 'não'}\n"
-            f"Fora de escopo: {'sim' if fora_de_escopo else 'não'}\n"
-            f"Pronto para agendar: {'sim' if pronto_para_agendar else 'não'}\n"
-            f"Tipo de busca: {match_busca}\n"
-            f"Motivo: {motivo_busca or '(n/a)'}\n"
-            f"Perfil: {json.dumps(estado.get('perfil') or {}, ensure_ascii=False)}\n"
-            f"Histórico:\n{hist_txt}\n"
-            f"Imóveis (única fonte de verdade):\n{catalogo_txt}\n\n"
-            f"Mensagem do lead: {mensagem}\n"
-            f"Qualificando lead: {'sim' if qualificando else 'não'}\n"
-            f"Próxima pergunta da qualificação: {proxima or '(nenhuma)'}\n"
-        )
-        resp = client.chat.completions.create(
-            model=config.LLM_MODEL,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            temperature=0.35,
-        )
-        return (resp.choices[0].message.content or "").strip() or None
-    except Exception:
+    if not descricoes:
         return None
 
-
-def processar_mensagem(lead_id: str, mensagem: str) -> dict[str, Any]:
-    estado = memoria.carregar(lead_id)
-    perfil_antes = dict(estado.get("perfil") or {})
-    primeira = _primeira_interacao(estado)
-    qual_antes = score_estado(estado)  # referência para decidir eventos de CRM
-
-    memoria.adicionar_mensagem(estado, "lead", mensagem)
-
-    fora = mensagem_fora_de_escopo(mensagem, perfil_antes)
-
-    if fora:
-        # Não polui o perfil com sinais falsos; não busca catálogo
-        perfil = perfil_antes
-        estado["perfil"] = perfil
-        qual = score_estado(estado)
-
-        sugestoes: list[dict[str, Any]] = []
-
-        resposta_llm = _resposta_llm(
-            mensagem,
-            estado,
-            sugestoes,
-            primeira=primeira,
-            fora_de_escopo=True,
-        )
-
-        usou_llm = bool(resposta_llm)
-
-        resposta = resposta_llm or _resposta_fora_de_escopo(
-            primeira=primeira
-        )
-
-        memoria.adicionar_mensagem(
-            estado,
-            "agente",
-            resposta,
-        )
-
-        memoria.salvar(estado)
-
-        return {
-            "lead_id": lead_id,
-            "resposta": resposta,
-            "perfil": perfil,
-            "qualificacao": qual,
-            "imoveis": [],
-            "exibir_imoveis": False,
-            "resumo_corretor": montar_resumo(estado),
-            "usou_llm": usou_llm,
-            "fora_de_escopo": True,
-        }
-
-    # Saudação pura: não força intenção; só conversa
-    if _so_saudacao(mensagem) and not perfil_antes.get("intencao"):
-        perfil = dict(perfil_antes)
-        estado["perfil"] = perfil
-        qual = score_estado(estado)
-
-        resposta = _resposta_deterministica(
-            mensagem,
-            estado,
-            qual,
-            [],
-            perfil_antes=perfil_antes,
-            mostrar_imoveis=False,
-            match_busca="nao_realizada",
-        )
-
-        memoria.adicionar_mensagem(
-            estado,
-            "agente",
-            resposta,
-        )
-
-        memoria.salvar(estado)
-
-        return {
-            "lead_id": lead_id,
-            "resposta": resposta,
-            "perfil": perfil,
-            "qualificacao": qual,
-            "imoveis": [],
-            "exibir_imoveis": False,
-            "match_busca": "nao_realizada",
-            "motivo_busca": "",
-            "resumo_corretor": montar_resumo(estado),
-            "usou_llm": False,
-            "fora_de_escopo": False,
-        }
-
-    perfil = extrair_sinais(
-        mensagem,
-        perfil_antes,
+    houve_substituicao = any(
+        antigo not in (None, "", False)
+        and novo != antigo
+        for campo, (antigo, novo) in alteracoes.items()
+        if not campo.endswith("_flexivel")
     )
 
-    # LLM complementa/corrige a regex
-    # (se houver OPENAI_API_KEY); sem chave, nada muda.
-    perfil = mesclar_perfil(
-        perfil,
-        extrair_perfil_llm(
-            mensagem,
-            perfil,
-            estado.get("mensagens"),
-        ),
+    prefixo = "Certo, atualizei" if (correcao or houve_substituicao) else "Perfeito, anotei"
+
+    if len(descricoes) == 1:
+        return f"{prefixo}: {descricoes[0]}."
+
+    return (
+        f"{prefixo}: "
+        + ", ".join(descricoes[:-1])
+        + f" e {descricoes[-1]}."
     )
 
-    estado["perfil"] = perfil
+
+def _resposta_fora_escopo(
+    *,
+    proxima_pergunta: str | None,
+) -> str:
+    base = (
+        "Por aqui eu consigo te ajudar com compra, aluguel, investimento "
+        "e visitas a imóveis."
+    )
+
+    if proxima_pergunta:
+        return f"{base} Voltando à sua busca: {proxima_pergunta}"
+
+    return f"{base} Se quiser, me diga o que você quer ajustar na busca."
+
+
+def _resposta_duvida_imobiliaria(
+    mensagem: str,
+    *,
+    proxima_pergunta: str | None,
+) -> str:
+    """Responde dúvidas comuns sem inventar características de imóveis."""
+    t = normalizar_texto(mensagem)
+
+    if "financi" in t:
+        resposta = (
+            "Sim, podemos considerar imóveis com possibilidade de financiamento, "
+            "mas as condições dependem do imóvel e da análise da instituição financeira."
+        )
+
+    elif any(x in t for x in ("garagem", "vaga", "pet", "cachorro", "gato", "elevador")):
+        resposta = (
+            "Isso depende do imóvel específico. Quando eu tiver as opções da sua busca, "
+            "essa característica precisa ser confirmada nos dados do imóvel."
+        )
+
+    elif any(x in t for x in ("condominio", "iptu")):
+        resposta = (
+            "Esse valor varia por imóvel. Eu só devo informar quando ele estiver disponível "
+            "nos dados da opção apresentada."
+        )
+
+    elif any(x in t for x in ("visita", "corretor", "agendar")):
+        resposta = (
+            "Consigo encaminhar uma visita ou conversa com um corretor assim que tivermos "
+            "o essencial da sua busca."
+        )
+
+    else:
+        resposta = (
+            "Posso te ajudar com essa dúvida dentro do contexto imobiliário. "
+            "Quando ela depender de um imóvel específico, eu só confirmo usando os dados da opção."
+        )
+
+    if proxima_pergunta:
+        resposta += f" Para seguir com a busca: {proxima_pergunta}"
+
+    return resposta
+
+
+def _oferecer_agenda() -> str:
+    horarios = sugerir_horarios(3)
+
+    if not horarios:
+        return (
+            "Já tenho o essencial da sua busca. "
+            "Posso te conectar com um corretor para combinar a visita."
+        )
+
+    linhas = [
+        "Já tenho o essencial da sua busca. Podemos combinar uma visita ou conversa com um corretor.",
+        "Tenho estes horários:",
+    ]
+
+    for h in horarios:
+        linhas.append(f"• {h}")
+
+    linhas.append("Qual funciona melhor para você?")
+
+    return "\n".join(linhas)
+
+
+def _buscar_por_perfil(
+    perfil: dict[str, Any],
+) -> dict[str, Any]:
+    regiao = None if perfil.get("regiao_flexivel") else perfil.get("regiao")
+    quartos = None if perfil.get("quartos_flexivel") else perfil.get("quartos")
+
+    if perfil.get("faixa_preco_flexivel") or perfil.get("ticket_flexivel"):
+        preco_max = None
+    else:
+        preco_max = perfil.get("faixa_preco") or perfil.get("ticket")
+
+    return buscar_resultado(
+        intencao=perfil.get("intencao"),
+        regiao=regiao,
+        quartos_min=int(quartos) if quartos is not None else None,
+        preco_max=float(preco_max) if preco_max is not None else None,
+    )
+
+
+def _resposta_resultado(
+    perfil: dict[str, Any],
+    resultado: dict[str, Any],
+) -> tuple[str, list[dict[str, Any]], bool, str, str]:
+    sugestoes = resultado.get("imoveis") or []
+    match = str(resultado.get("match") or "vazio")
+    motivo = str(resultado.get("motivo") or "")
+
+    if sugestoes:
+        partes: list[str] = []
+
+        if match == "aproximado":
+            if motivo:
+                partes.append(f"Não encontrei o filtro exato. {motivo}.")
+            else:
+                partes.append("Não encontrei o filtro exato, mas achei opções próximas.")
+        else:
+            partes.append("Encontrei estas opções para o seu perfil:")
+
+        for imovel in sugestoes[:3]:
+            partes.append(formatar_imovel(imovel))
+
+        partes.append(
+            "Quer ver alguma dessas, ajustar algum ponto da busca ou marcar uma visita?"
+        )
+
+        return "\n\n".join(partes), sugestoes, True, match, motivo
+
+    return (
+        "Não encontrei uma opção com esse conjunto de filtros agora. "
+        "Podemos ajustar região, valor ou quantidade de quartos — o que você prefere mudar?",
+        [],
+        False,
+        "vazio",
+        motivo,
+    )
+
+
+def _finalizar(
+    *,
+    estado: dict[str, Any],
+    lead_id: str,
+    resposta: str,
+    qual_antes: dict[str, Any],
+    imoveis: list[dict[str, Any]] | None = None,
+    exibir_imoveis: bool = False,
+    match_busca: str = "nao_realizada",
+    motivo_busca: str = "",
+    fora_de_escopo: bool = False,
+    usou_llm: bool = False,
+) -> dict[str, Any]:
+    memoria.adicionar_mensagem(estado, "agente", resposta)
 
     qual = score_estado(estado)
-
-    faltantes = campos_faltantes(perfil)
-    qualificando = bool(faltantes)
-    proxima = proxima_pergunta(perfil)
-
-    sugestoes: list[dict[str, Any]] = []
-    match_busca = "nao_realizada"
-    motivo_busca = ""
-    mostrar = False
-
-    if (
-        not qualificando
-        and pode_sugerir_imoveis(perfil)
-    ):
-        preco_max = (
-            perfil.get("faixa_preco")
-            or perfil.get("ticket")
-        )
-
-        quartos = perfil.get("quartos")
-
-        resultado = buscar_resultado(
-            intencao=perfil.get("intencao"),
-            regiao=perfil.get("regiao"),
-            quartos_min=(
-                int(quartos)
-                if quartos is not None
-                else None
-            ),
-            preco_max=(
-                float(preco_max)
-                if preco_max is not None
-                else None
-            ),
-        )
-
-        sugestoes = resultado.get("imoveis") or []
-
-        match_busca = str(
-            resultado.get("match") or "vazio"
-        )
-
-        motivo_busca = str(
-            resultado.get("motivo") or ""
-        )
-
-        mostrar = bool(sugestoes) and (
-            perfil.get("quartos") is not None
-            or perfil.get("faixa_preco") is not None
-            or match_busca == "aproximado"
-        )
-
-    resposta_llm = _resposta_llm(
-        mensagem,
-        estado,
-        sugestoes if mostrar else [],
-        primeira=primeira,
-        pronto_para_agendar=bool(
-            qual.get("pronto_para_agendar")
-        ),
-        match_busca=(
-            "n/a"
-            if qualificando
-            else match_busca
-        ),
-        motivo_busca=(
-            ""
-            if qualificando
-            else motivo_busca
-        ),
-        qualificando=qualificando,
-        proxima=proxima,
-    )
-
-    usou_llm = bool(resposta_llm)
-
-    resposta = resposta_llm or _resposta_deterministica(
-        mensagem,
-        estado,
-        qual,
-        sugestoes if mostrar else [],
-        perfil_antes=perfil_antes,
-        mostrar_imoveis=mostrar,
-        match_busca=match_busca,
-        motivo_busca=motivo_busca,
-    )
-
-    memoria.adicionar_mensagem(
-        estado,
-        "agente",
-        resposta,
-    )
-
     resumo = montar_resumo(estado)
 
-    # Envia ao CRM só se prioridade/prontidão mudou nesta mensagem
     crm = sincronizar_crm(
         estado,
         resumo,
@@ -763,57 +406,243 @@ def processar_mensagem(lead_id: str, mensagem: str) -> dict[str, Any]:
     return {
         "lead_id": lead_id,
         "resposta": resposta,
-        "perfil": perfil,
+        "perfil": estado.get("perfil") or {},
         "qualificacao": qual,
-        "imoveis": sugestoes if mostrar else [],
-        "exibir_imoveis": mostrar,
-        "match_busca": (
-            "nao_realizada"
-            if qualificando
-            else match_busca
-        ),
-        "motivo_busca": (
-            motivo_busca
-            if mostrar
-            else ""
-        ),
+        "imoveis": imoveis or [],
+        "exibir_imoveis": exibir_imoveis,
+        "match_busca": match_busca,
+        "motivo_busca": motivo_busca,
         "resumo_corretor": resumo,
         "usou_llm": usou_llm,
         "crm": crm,
-        "fora_de_escopo": False,
+        "fora_de_escopo": fora_de_escopo,
     }
 
 
-def follow_up(lead_id: str) -> dict[str, Any]:
-    """Retoma conversa parada mantendo contexto (cenário 3 do desafio)."""
+def processar_mensagem(
+    lead_id: str,
+    mensagem: str,
+) -> dict[str, Any]:
     estado = memoria.carregar(lead_id)
+    estado.setdefault("perfil", {})
+
+    perfil_antes = dict(estado.get("perfil") or {})
+    qual_antes = score_estado(estado)
+    controle = _controle(estado)
+
+    campo_aguardando = controle.get("campo_aguardando")
+    ultimo_campo = controle.get("ultimo_campo_preenchido")
+
+    memoria.adicionar_mensagem(estado, "lead", mensagem)
+
+    # Saudação pura: não manda ao catálogo nem inventa intenção.
+    if _so_saudacao(mensagem) and not perfil_antes:
+        controle["campo_aguardando"] = "intencao"
+
+        resposta = (
+            "Oi! Sou o assistente da imobiliária. "
+            "Te ajudo a encontrar o imóvel ideal e, se fizer sentido, "
+            "também posso encaminhar uma visita com um corretor.\n\n"
+            "Você está buscando comprar, alugar ou investir?"
+        )
+
+        return _finalizar(
+            estado=estado,
+            lead_id=lead_id,
+            resposta=resposta,
+            qual_antes=qual_antes,
+        )
+
+    interpretacao = interpretar_mensagem(
+        mensagem,
+        perfil_antes,
+        campo_aguardando=campo_aguardando,
+        ultimo_campo_preenchido=ultimo_campo,
+    )
+
+    categoria = interpretacao.get("categoria") or "outro"
+    correcao = bool(interpretacao.get("correcao"))
+    dados = interpretacao.get("dados") or {}
+    usou_llm = bool(interpretacao.get("usou_llm"))
+
+    # Fora de escopo: preserva 100% do perfil e da etapa.
+    if categoria == "fora_escopo" and not dados:
+        proxima = pergunta_para(proximo_campo(perfil_antes))
+        resposta = _resposta_fora_escopo(
+            proxima_pergunta=proxima,
+        )
+
+        return _finalizar(
+            estado=estado,
+            lead_id=lead_id,
+            resposta=resposta,
+            qual_antes=qual_antes,
+            fora_de_escopo=True,
+            usou_llm=usou_llm,
+        )
+
+    perfil, alteracoes = reconciliar_perfil(
+        perfil_antes,
+        dados,
+    )
+
+    estado["perfil"] = perfil
+
+    ultimo_alterado = _campo_principal_alterado(alteracoes)
+
+    if ultimo_alterado:
+        controle["ultimo_campo_preenchido"] = ultimo_alterado
+
+    # A cada mensagem recalculamos do zero o que falta.
+    # Não importa qual era a pergunta anterior se o usuário trouxe outra informação.
+    proximo = proximo_campo(perfil)
+    controle["campo_aguardando"] = proximo
+
+    # Dúvida imobiliária no meio do fluxo:
+    # responde e retoma o próximo campo sem perder qualquer dado fornecido junto.
+    if categoria == "duvida_imobiliaria":
+        pergunta = pergunta_para(proximo)
+        resposta = _resposta_duvida_imobiliaria(
+            mensagem,
+            proxima_pergunta=pergunta,
+        )
+
+        return _finalizar(
+            estado=estado,
+            lead_id=lead_id,
+            resposta=resposta,
+            qual_antes=qual_antes,
+            usou_llm=usou_llm,
+        )
+
+    # Ainda qualificando.
+    if proximo:
+        ack = _ack_alteracoes(
+            alteracoes,
+            correcao=correcao,
+        )
+
+        pergunta = pergunta_para(proximo) or "Pode me contar um pouco mais sobre sua busca?"
+
+        if ack:
+            resposta = f"{ack}\n\n{pergunta}"
+        elif categoria == "outro":
+            resposta = (
+                "Não consegui identificar esse dado com segurança. "
+                f"{pergunta}"
+            )
+        else:
+            resposta = pergunta
+
+        return _finalizar(
+            estado=estado,
+            lead_id=lead_id,
+            resposta=resposta,
+            qual_antes=qual_antes,
+            usou_llm=usou_llm,
+        )
+
+    # Qualificação completa.
+    controle["campo_aguardando"] = None
+
+    if _quer_agendar(mensagem):
+        resposta = _oferecer_agenda()
+
+        return _finalizar(
+            estado=estado,
+            lead_id=lead_id,
+            resposta=resposta,
+            qual_antes=qual_antes,
+            usou_llm=usou_llm,
+        )
+
+    # "não gostei"/"não" após a busca não deve repetir a mesma busca sem sentido.
+    t = normalizar_texto(mensagem)
+
+    if not alteracoes and t in {
+        "nao",
+        "nao gostei",
+        "nenhuma",
+        "nenhum",
+        "quero outra",
+        "outra opcao",
+    }:
+        resposta = (
+            "Sem problema. O que você prefere mudar: região, valor ou quantidade de quartos?"
+        )
+
+        return _finalizar(
+            estado=estado,
+            lead_id=lead_id,
+            resposta=resposta,
+            qual_antes=qual_antes,
+            usou_llm=usou_llm,
+        )
+
+    # Só aqui o catálogo é consultado.
+    resultado = _buscar_por_perfil(perfil)
+
+    resposta, sugestoes, mostrar, match, motivo = _resposta_resultado(
+        perfil,
+        resultado,
+    )
+
+    estado["imoveis_sugeridos"] = [
+        imovel.get("id")
+        for imovel in sugestoes
+        if imovel.get("id") is not None
+    ]
+
+    return _finalizar(
+        estado=estado,
+        lead_id=lead_id,
+        resposta=resposta,
+        qual_antes=qual_antes,
+        imoveis=sugestoes if mostrar else [],
+        exibir_imoveis=mostrar,
+        match_busca=match,
+        motivo_busca=motivo,
+        usou_llm=usou_llm,
+    )
+
+
+def follow_up(lead_id: str) -> dict[str, Any]:
+    """Retoma a conversa preservando o estado real do lead."""
+    estado = memoria.carregar(lead_id)
+    estado.setdefault("perfil", {})
+
     perfil = estado.get("perfil") or {}
-    qual = score_estado(estado)
-    pergunta = proxima_pergunta(perfil)
+    controle = _controle(estado)
 
-    if estado.get("mensagens"):
-        trechos = []
-        if perfil.get("intencao"):
-            trechos.append(_label_intencao(str(perfil["intencao"])))
-        if perfil.get("regiao"):
-            trechos.append(f"em {perfil['regiao']}")
-        contexto = (" " + " ".join(trechos)) if trechos else ""
+    proximo = proximo_campo(perfil)
+    controle["campo_aguardando"] = proximo
+
+    if proximo:
+        pergunta = pergunta_para(proximo) or "Quer continuar sua busca?"
+
+        if perfil.get("intencao") or perfil.get("regiao"):
+            texto = f"Oi! Retomando sua busca: {pergunta}"
+        else:
+            texto = f"Oi! Vamos continuar de onde paramos. {pergunta}"
+
+    elif qualificacao_concluida(perfil):
         texto = (
-            f"Oi! Passando só para retomar nossa conversa{contexto}. "
-            "Vi que paramos no meio e queria te ajudar a avançar sem pressa."
+            "Oi! Já tenho o essencial da sua busca. "
+            "Se quiser, posso retomar as opções ou encaminhar uma visita com um corretor."
         )
+
     else:
-        texto = (
-            "Oi! Eu sou o assistente da imobiliária. "
-            "Posso te ajudar a encontrar o imóvel certo — "
-            "você busca comprar, alugar ou investir?"
-        )
+        texto = "Oi! Quer continuar sua busca de imóvel?"
 
-    if pergunta:
-        texto += f" {pergunta}"
-    elif qual.get("pronto_para_agendar"):
-        texto += " Se fizer sentido, já posso te passar horários para uma visita."
-
-    memoria.adicionar_mensagem(estado, "agente", texto)
+    memoria.adicionar_mensagem(
+        estado,
+        "agente",
+        texto,
+    )
     memoria.salvar(estado)
-    return {"lead_id": lead_id, "resposta": texto, "qualificacao": qual}
+
+    return {
+        "lead_id": lead_id,
+        "resposta": texto,
+        "qualificacao": score_estado(estado),
+    }
