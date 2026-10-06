@@ -193,16 +193,9 @@ def test_fluxo_nome_email_com_erro_de_digitacao_e_um_toque(resend):
     assert montar_dashboard()["captura"] == {"com_nome": 1, "com_email": 1, "convites_enviados": 1}
 
 
-def test_llm_que_repete_horarios_nao_atrapalha_o_um_toque(monkeypatch, resend):
-    """Regressão: o GPT copiava a lista de horários do histórico e o 'sim' virava 'qual desses?'."""
-    from src.agente import sdr
-
+def test_email_depois_dos_horarios_vira_proposta_de_um_toque(resend):
     processar_mensagem("CAP-6", "Quero comprar apartamento em Moema")
     processar_mensagem("CAP-6", "3 quartos, até 1,5 milhão, urgente essa semana")
-    monkeypatch.setattr(
-        sdr, "_resposta_llm",
-        lambda *a, **k: "Ótimo! Quais horários você prefere?\n• 30/09/2026 10:00\n• 30/09/2026 14:00",
-    )
     r = processar_mensagem("CAP-6", "meu email é leo@exemplo.com")
     assert r["resposta"].startswith("Anotei seu e-mail. Posso reservar a visita para quarta, 30/09/2026 às 10:00?")
     assert "14:00" not in r["resposta"]

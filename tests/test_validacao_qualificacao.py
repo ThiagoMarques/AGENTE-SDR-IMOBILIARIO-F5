@@ -100,7 +100,6 @@ def test_c09_agora_nao_indica_urgencia_quando_so_olhando():
     assert r["qualificacao"]["prioridade"] == "frio"
 
 
-@pytest.mark.xfail(strict=True, reason=REGEX + ': "renda" com "alugar" vira investimento')
 def test_c10_renda_do_cliente_nao_e_investimento():
     r = conversar("C10", "Quero alugar apto, minha renda é 10 mil, 2 quartos na zona oeste.")
     assert r["perfil"]["intencao"] == "aluguel"

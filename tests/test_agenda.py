@@ -301,6 +301,21 @@ def test_nao_reoferece_horarios_com_visita_marcada():
     assert "•" not in r["resposta"]
 
 
+def test_escolhe_horario_depois_de_tirar_uma_duvida():
+    _qualificar("AG-8")
+    processar_mensagem("AG-8", "tem vaga de garagem?")
+    r = processar_mensagem("AG-8", "o segundo")
+    assert r["agendamento"] and r["agendamento"]["quando"] == "quarta, 30/09 às 14h"
+
+
+def test_sim_depois_de_agendar_nao_remarca_pela_oferta_antiga():
+    _qualificar("AG-9")
+    processar_mensagem("AG-9", "o primeiro")
+    processar_mensagem("AG-9", "tem vaga de garagem?")
+    r = processar_mensagem("AG-9", "sim")
+    assert r["agendamento"]["quando"] == "quarta, 30/09 às 10h"
+
+
 def test_horario_ocupado_no_calendario_oferece_alternativas(monkeypatch):
     fake = ProvedorFake()
     monkeypatch.setattr(cal, "provedores_configurados", lambda: [fake])
@@ -317,17 +332,6 @@ def test_data_e_hora_explicitas_agendam_sem_oferta_previa():
 
 def test_numero_solto_nao_vira_horario_sem_oferta():
     assert scheduler.interpretar_escolha("orçamento de 15", [], REF) is None
-
-
-def test_llm_que_fala_de_visita_sem_horarios_recebe_a_lista(monkeypatch):
-    """Regressão: o GPT perguntava 'quer agendar?' sem horários e depois 'confirmava' sem gravar."""
-    from src.agente import sdr
-
-    monkeypatch.setattr(sdr, "_resposta_llm", lambda *a, **k: "Achei um apto em Moema. Quer agendar uma visita?")
-    r = _qualificar("AG-7")
-    assert "• 30/09/2026 10:00" in r["resposta"]
-    r = processar_mensagem("AG-7", "pode ser amanhã às 10")
-    assert r["agendamento"] is not None and montar_dashboard()["agendamentos"] == 1
 
 
 # ---------------------------------------------------------------- API
