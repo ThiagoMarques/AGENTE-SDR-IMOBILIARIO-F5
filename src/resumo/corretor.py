@@ -24,6 +24,7 @@ import config
 from src.qualificacao.lead import formatar_valor, score_estado
 
 ROTULOS = {
+    "nome": "Nome",
     "intencao": "Intenção",
     "regiao": "Região",
     "quartos": "Quartos",

@@ -39,6 +39,7 @@ export type Agendamento = {
   imovel_titulo?: string | null;
   local?: string;
   convidados: string[];
+  convite_enviado?: boolean;
   calendarios: Array<{ provedor: "google" | "outlook" | string; status: string; link?: string | null }>;
   links: { google: string; outlook: string; outlook_365: string; ics: string };
 };
@@ -58,8 +59,10 @@ export type Dashboard = {
   total_conversas: number;
   por_prioridade: Record<string, number>;
   agendamentos: number;
+  captura?: { com_nome: number; com_email: number; convites_enviados: number };
   leads: Array<{
     lead_id: string;
+    nome?: string | null;
     score: number;
     prioridade: string;
     mensagens: number;

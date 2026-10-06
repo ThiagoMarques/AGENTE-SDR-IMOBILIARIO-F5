@@ -22,6 +22,7 @@ import config
 
 
 class PerfilExtraido(BaseModel):
+    nome: Optional[str] = Field(None, max_length=60, description="nome do lead, só se ele disser como se chama")
     intencao: Optional[Literal["compra", "aluguel", "investimento"]] = None
     regiao: Optional[str] = Field(None, description="bairro ou região citada, em minúsculas")
     quartos: Optional[int] = Field(None, ge=0, le=10)
@@ -35,8 +36,9 @@ class PerfilExtraido(BaseModel):
 
 _SYSTEM = (
     "Você extrai dados de qualificação de leads imobiliários. "
-    "Responda SOMENTE um JSON com as chaves: intencao, regiao, quartos, faixa_preco, "
+    "Responda SOMENTE um JSON com as chaves: nome, intencao, regiao, quartos, faixa_preco, "
     "ticket, urgencia, retorno_esperado, perfil, objecoes. "
+    "nome: só quando o lead disser como se chama (nunca nome de bairro, corretor ou imóvel). "
     "Use null quando a informação não aparecer. Não invente dados. "
     "Valores monetários como número (\"800k\" -> 800000). "
     "urgencia: alta (dias/semanas, 'urgente'), media (alguns meses), baixa (sem pressa, só pesquisando)."

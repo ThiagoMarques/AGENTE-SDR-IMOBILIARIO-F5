@@ -137,15 +137,29 @@ def _dobrar(linha: str) -> str:
     return "\r\n".join(partes)
 
 
-def gerar_ics(ev: Evento) -> str:
+def _cn(nome: str) -> str:
+    return nome.replace('"', "").replace(";", "").replace(":", "").strip()
+
+
+def gerar_ics(
+    ev: Evento,
+    *,
+    metodo: str = "PUBLISH",
+    organizador: str = "",
+    nomes: dict[str, str] | None = None,
+    sequencia: int = 0,
+) -> str:
+    """PUBLISH = arquivo para importar; REQUEST/CANCEL = convite (RFC 5546) com RSVP."""
+    convite = metodo in ("REQUEST", "CANCEL")
     linhas = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
         "PRODID:-//Agente SDR Imobiliario//PT-BR",
         "CALSCALE:GREGORIAN",
-        "METHOD:PUBLISH",
+        f"METHOD:{metodo}",
         "BEGIN:VEVENT",
         f"UID:{ev.uid}",
+        f"SEQUENCE:{sequencia}",
         f"DTSTAMP:{_basico_utc(datetime.now(timezone.utc))}",
         f"DTSTART:{_basico_utc(ev.inicio)}",
         f"DTEND:{_basico_utc(ev.fim)}",
@@ -155,15 +169,24 @@ def gerar_ics(ev: Evento) -> str:
         linhas.append(f"DESCRIPTION:{_ics_texto(ev.descricao)}")
     if ev.local:
         linhas.append(f"LOCATION:{_ics_texto(ev.local)}")
-    linhas += [
-        "BEGIN:VALARM",
-        "ACTION:DISPLAY",
-        "DESCRIPTION:Lembrete da visita",
-        "TRIGGER:-PT1H",
-        "END:VALARM",
-        "END:VEVENT",
-        "END:VCALENDAR",
-    ]
+    if convite:
+        linhas.append("STATUS:" + ("CANCELLED" if metodo == "CANCEL" else "CONFIRMED"))
+        if organizador:
+            linhas.append(f'ORGANIZER;CN="{_cn(config.AGENDA_IMOBILIARIA)}":mailto:{organizador}')
+        for email in ev.convidados:
+            cn = _cn((nomes or {}).get(email) or email)
+            linhas.append(
+                f'ATTENDEE;CN="{cn}";ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:{email}'
+            )
+    if metodo != "CANCEL":
+        linhas += [
+            "BEGIN:VALARM",
+            "ACTION:DISPLAY",
+            "DESCRIPTION:Lembrete da visita",
+            "TRIGGER:-PT1H",
+            "END:VALARM",
+        ]
+    linhas += ["END:VEVENT", "END:VCALENDAR"]
     return "\r\n".join(_dobrar(l) for l in linhas) + "\r\n"
 
 

@@ -9,11 +9,12 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 import config
 from src.agenda import calendario as cal
+from src.agenda import email_convite
 from src.imoveis.catalogo_br import CATALOGO_BR
 
 FORMATO = "%d/%m/%Y %H:%M"
@@ -58,6 +59,12 @@ def formatar_humano(dt: datetime) -> str:
     return f"{_NOMES_DIA[local.weekday()]}, {local:%d/%m} às {hora}"
 
 
+def formatar_proposta(dt: datetime) -> str:
+    """'quarta, 30/09/2026 às 10:00' — legível e reconhecido por horarios_no_texto."""
+    local = dt.astimezone(cal.fuso())
+    return f"{_NOMES_DIA[local.weekday()]}, {local:%d/%m/%Y} às {local:%H:%M}"
+
+
 def rotulo_dia(d: date) -> str:
     nome = _NOMES_DIA[d.weekday()]
     artigo = "no" if nome in ("sábado", "domingo") else "na"
@@ -72,8 +79,9 @@ def parse_horario(texto: str) -> datetime | None:
 
 
 def horarios_no_texto(texto: str) -> list[str]:
-    """Horários 'dd/mm/aaaa hh:mm' que o agente listou numa mensagem."""
-    return [f"{d} {h}" for d, h in re.findall(r"(\d{2}/\d{2}/\d{4}) (\d{2}:\d{2})", texto or "")]
+    """Horários 'dd/mm/aaaa hh:mm' (ou 'dd/mm/aaaa às hh:mm') que o agente citou numa mensagem."""
+    achados = re.findall(r"(\d{2}/\d{2}/\d{4})(?:,? às)? (\d{2}:\d{2})", texto or "")
+    return list(dict.fromkeys(f"{d} {h}" for d, h in achados))
 
 
 def _duracao() -> timedelta:
@@ -239,6 +247,10 @@ def _ordinal(t: str, ofertados: list[str]) -> str | None:
     return None
 
 
+def validar_horario(dt: datetime, referencia: datetime | None = None) -> str:
+    return _validar(dt, referencia or agora())
+
+
 def _validar(dt: datetime, ref: datetime) -> str:
     if dt < ref + ANTECEDENCIA_MIN:
         return "passado"
@@ -314,7 +326,7 @@ def pede_remarcacao(texto: str) -> bool:
 
 def extrair_email(texto: str) -> str | None:
     m = re.search(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+", texto or "")
-    return m.group(0).lower() if m else None
+    return m.group(0).lower().rstrip(".") if m else None
 
 
 # ---------------------------------------------------------------- registro
@@ -369,7 +381,8 @@ def _descricao_corretor(estado: dict[str, Any], imovel: dict[str, Any] | None) -
     perfil = estado.get("perfil") or {}
     campos = ("intencao", "regiao", "quartos", "faixa_preco", "ticket", "urgencia", "email")
     resumo = ", ".join(f"{c}={perfil[c]}" for c in campos if perfil.get(c) not in (None, ""))
-    linhas = [f"Lead: {estado.get('lead_id')}"]
+    nome = f" — {perfil['nome']}" if perfil.get("nome") else ""
+    linhas = [f"Lead: {estado.get('lead_id')}{nome}"]
     if imovel:
         linhas.append(f"Imóvel: {imovel.get('id')} — {imovel.get('titulo')}")
     if resumo:
@@ -445,7 +458,7 @@ def agendar(
         "convidados": ev.convidados,
         "calendarios": cal.criar_nos_provedores(ev),
     }
-    return registrar_agendamento(
+    item = registrar_agendamento(
         estado,
         horario=formatar(inicio),
         tipo=tipo,
@@ -453,6 +466,56 @@ def agendar(
         inicio=inicio,
         detalhes=detalhes,
     )
+    enviar_convite_email(estado, item)
+    return item
+
+
+def _agenda_ja_convidou(detalhes: dict[str, Any]) -> bool:
+    return any(
+        c.get("status") == "criado" and not c.get("erro_convite")
+        for c in detalhes.get("calendarios") or []
+    )
+
+
+def convite_enviado(ag: dict[str, Any]) -> bool:
+    """O lead recebeu convite (pela agenda do corretor ou por e-mail transacional)?"""
+    detalhes = ag.get("detalhes") or {}
+    if not detalhes.get("convidados"):
+        return False
+    return _agenda_ja_convidou(detalhes) or (detalhes.get("email_convite") or {}).get("status") == "enviado"
+
+
+def enviar_convite_email(estado: dict[str, Any], ag: dict[str, Any], *, metodo: str = "REQUEST") -> None:
+    """E-mail com .ics de convite (ou cancelamento). Pula se a agenda do corretor já convidou."""
+    detalhes = ag.setdefault("detalhes", {})
+    convidados = list(detalhes.get("convidados") or [])
+    if not convidados or not email_convite.configurado():
+        return
+    if metodo == "REQUEST" and _agenda_ja_convidou(detalhes):
+        return
+    if metodo == "CANCEL" and (detalhes.get("email_convite") or {}).get("status") != "enviado":
+        return
+    nome = (estado.get("perfil") or {}).get("nome")
+    sequencia = int(detalhes.get("sequencia") or 0) + (1 if metodo == "CANCEL" else 0)
+    ev = evento_do_agendamento(ag)
+    ics = cal.gerar_ics(
+        ev,
+        metodo=metodo,
+        organizador=config.AGENDA_CORRETOR_EMAIL or email_convite.remetente_email(),
+        nomes={convidados[0]: nome} if nome else None,
+        sequencia=sequencia,
+    )
+    assunto, html_corpo, texto = email_convite.montar(
+        nome=nome,
+        titulo=ev.titulo,
+        quando=formatar_humano(ev.inicio),
+        local=ev.local,
+        links=cal.links(ev),
+        cancelado=metodo == "CANCEL",
+    )
+    r = email_convite.enviar(convidados, assunto=assunto, html_corpo=html_corpo, texto=texto, ics=ics, metodo=metodo)
+    detalhes["email_convite"] = {**r, "metodo": metodo, "em": datetime.now(timezone.utc).isoformat()}
+    detalhes["sequencia"] = sequencia
 
 
 def cancelar(estado: dict[str, Any], *, status: str = "cancelado") -> dict[str, Any] | None:
@@ -461,6 +524,7 @@ def cancelar(estado: dict[str, Any], *, status: str = "cancelado") -> dict[str, 
         return None
     detalhes = ag.setdefault("detalhes", {})
     detalhes["calendarios"] = cal.cancelar_nos_provedores(list(detalhes.get("calendarios") or []))
+    enviar_convite_email(estado, ag, metodo="CANCEL")
     ag["status"] = status
     return ag
 
@@ -487,6 +551,7 @@ def convidar_lead(estado: dict[str, Any], email: str) -> dict[str, Any] | None:
         return ag
     detalhes["convidados"] = convidados + [email]
     detalhes["calendarios"] = cal.convidar(list(detalhes.get("calendarios") or []), [email])
+    enviar_convite_email(estado, ag)
     return ag
 
 
@@ -508,6 +573,7 @@ def publico(ag: dict[str, Any], lead_id: str, indice: int) -> dict[str, Any]:
         "imovel_titulo": imovel.get("titulo") if imovel else None,
         "local": ev.local,
         "convidados": detalhes.get("convidados") or [],
+        "convite_enviado": convite_enviado(ag),
         "calendarios": [
             {k: c.get(k) for k in ("provedor", "status", "link")}
             for c in detalhes.get("calendarios") or []

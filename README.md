@@ -132,7 +132,8 @@ Prioridade: **quente** ≥ 70 · **morno** ≥ 40 · **frio** < 40. **Sem orçam
 │   ├── coleta/perfil.py        # Funil: campos por intenção e próxima pergunta
 │   ├── qualificacao/
 │   │   ├── lead.py             # Score, prioridade, encaminhamento
-│   │   └── extracao_llm.py     # Extração estruturada com LLM
+│   │   ├── extracao_llm.py     # Extração estruturada com LLM
+│   │   └── contato.py          # Nome, correção de e-mail e respostas sim/não
 │   ├── imoveis/
 │   │   ├── catalogo.py         # Busca (escolhe a fonte pelo IMOVEIS_SOURCE)
 │   │   └── catalogo_br.py      # Catálogo sintético Brasil (BRL)
@@ -141,6 +142,7 @@ Prioridade: **quente** ≥ 70 · **morno** ≥ 40 · **frio** < 40. **Sem orçam
 │   ├── agenda/
 │   │   ├── scheduler.py        # Horários livres, leitura da escolha, agendar/remarcar/cancelar
 │   │   ├── calendario.py       # Links Google/Outlook, .ics, Google Calendar API, Microsoft Graph
+│   │   ├── email_convite.py    # Convite por e-mail (Resend/SendGrid) com .ics de RSVP
 │   │   └── oauth.py            # Autorização única (--agenda-auth google|outlook)
 │   ├── resumo/corretor.py      # Resumo para o corretor (.md e .json)
 │   ├── crm/
@@ -218,6 +220,26 @@ A integração funciona em três níveis:
 
 Confira com `python main.py --checar` (linha `agenda:`) ou `GET /health` (campo `agenda`).
 
+### Captura de nome e e-mail e agendamento em um toque
+
+O agente coleta o contato ao longo da conversa, sem formulário:
+
+1. **Nome:** na primeira resposta ele pergunta "como posso te chamar?" e entende tanto frases ("meu nome é Ana", "me chamo João", "aqui é a Bia") quanto a resposta curta ("Ana"). Uma resposta curta que na verdade responde outra pergunta ("comprar", "Pinheiros") não vira nome.
+2. **E-mail:** ao oferecer horários, pede o e-mail explicando o uso ("uso só para o convite e o contato do corretor"). Se o domínio parecer digitado errado (`gmial.com`, `hotmal.com`), confirma antes: "seu e-mail é ana@gmail.com?". Se o lead disser "não" e redigitar o mesmo endereço, vale o que ele digitou.
+3. **Um toque:** com o e-mail em mãos, o agente propõe o primeiro horário livre ("Posso reservar a visita para quarta, 30/09/2026 às 10:00?"). Basta responder "sim": a visita é registrada e o convite sai na hora.
+
+O convite chega por um destes caminhos, sem duplicar:
+
+| Situação | Como o lead recebe |
+|---|---|
+| Agenda do corretor conectada (Google/Outlook) | Convite enviado pela própria agenda |
+| Sem agenda, com Resend ou SendGrid configurado | E-mail com `.ics` (`METHOD:REQUEST`): Gmail e Outlook mostram os botões Sim/Não/Talvez e colocam a visita na agenda. Remarcar ou cancelar manda `METHOD:CANCEL` com o mesmo UID |
+| Nada configurado | Botões "adicionar à agenda" e `.ics` no chat |
+
+**Configurar o envio:** crie uma chave no [Resend](https://resend.com/) ou no [SendGrid](https://sendgrid.com/) e preencha `EMAIL_FROM` e `RESEND_API_KEY` (ou `SENDGRID_API_KEY`) no `.env`. No Resend, sem domínio verificado, só é possível enviar para o e-mail dono da conta, o que basta para a demo. Confira com `python main.py --checar` (linha `convite por e-mail:`).
+
+O dashboard mostra quantos leads deixaram nome e e-mail e quantos convites foram enviados.
+
 ### Demonstração pela CLI (3 cenários do desafio)
 
 Com o PostgreSQL e o CRM simulado no ar:
@@ -279,6 +301,7 @@ Os testes rodam **sem internet, sem LLM e sem banco**: o catálogo é simulado, 
 - **CRM:** envio HTTP real contra o CRM simulado, upsert, fila de pendentes, token e eventos disparados pelo agente.
 - **LLM simulado:** cliente OpenAI falso para validar parsing, validação Pydantic e fallback.
 - **Agenda:** leitura de horários em linguagem natural (sem falso positivo em "2 quartos" ou "900 mil"), horários livres, links Google/Outlook, `.ics` (RFC 5545), provedores Google/Microsoft com HTTP simulado, agendar/remarcar/cancelar pelo chat, contador do dashboard e rota `.ics`.
+- **Captura e convite:** extração de nome, correção de domínio do e-mail, "sim" de um toque, `.ics` REQUEST/CANCEL, envio pelo Resend e pelo SendGrid com HTTP simulado e ausência de convite duplicado quando a agenda do corretor já convidou.
 - **Validação ponta a ponta:** 12 conversas realistas pelo fluxo completo. Os casos marcados como `xfail` são **defeitos conhecidos** da extração por regex (ver [Limitações conhecidas](#limitações-conhecidas)). Quando um deles for corrigido, o teste acusa XPASS, avisando para remover a marcação.
 
 ## Configuração (.env)
@@ -302,6 +325,9 @@ Os testes rodam **sem internet, sem LLM e sem banco**: o catálogo é simulado, 
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Não | — | Credencial OAuth (App para computador) do Google |
 | `GOOGLE_CALENDAR_ID` | Não | `primary` | Agenda do corretor no Google |
 | `MS_CLIENT_ID` / `MS_TENANT` | Não | — / `common` | App do Microsoft Entra para o Outlook |
+| `EMAIL_PROVIDER` | Não | automático | `resend` ou `sendgrid`; vazio usa o que tiver chave |
+| `EMAIL_FROM` | Não | — | Remetente do convite, ex.: `Imobiliária <visitas@seudominio.com.br>` |
+| `RESEND_API_KEY` / `SENDGRID_API_KEY` | Não | — | Chave do serviço de e-mail transacional. Sem chave, o envio fica desligado |
 
 ## Segurança e privacidade
 
@@ -311,6 +337,7 @@ Os testes rodam **sem internet, sem LLM e sem banco**: o catálogo é simulado, 
 - As conversas ficam no PostgreSQL local, e as saídas geradas em `dados/`, fora do Git.
 - Os tokens da agenda ficam em `dados/agenda_tokens.json` (permissão 600, fora do Git). Os escopos pedidos são só os de eventos e disponibilidade da agenda.
 - O evento enviado ao lead não leva score nem prioridade: só os dados que ele mesmo informou.
+- O e-mail só é pedido com a finalidade explicada ao lead (convite e contato do corretor), e o convite traz um aviso de por que ele foi enviado (LGPD).
 - O agente **não fecha negócio sozinho**: ele qualifica e resume, e a decisão é do corretor.
 
 ## Limitações conhecidas

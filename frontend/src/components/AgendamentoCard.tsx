@@ -57,7 +57,11 @@ export function AgendamentoCard({ agendamento, compacto = false }: { agendamento
               </Chip.Label>
             </Chip>
           ))}
-          {ag.convidados.length > 0 && <span>convite para {ag.convidados.join(", ")}</span>}
+          {ag.convidados.length > 0 && (
+            <span>
+              {ag.convite_enviado ? "convite enviado para" : "e-mail anotado:"} {ag.convidados.join(", ")}
+            </span>
+          )}
         </div>
       )}
     </div>

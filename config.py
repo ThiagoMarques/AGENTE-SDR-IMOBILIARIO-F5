@@ -68,3 +68,9 @@ MS_CLIENT_SECRET = (os.getenv("MS_CLIENT_SECRET") or "").strip()
 MS_TENANT = (os.getenv("MS_TENANT") or "common").strip()
 MS_REFRESH_TOKEN = (os.getenv("MS_REFRESH_TOKEN") or "").strip()
 
+# Convite por e-mail (serviço transacional). Vazio = só links/.ics no chat.
+EMAIL_PROVIDER = (os.getenv("EMAIL_PROVIDER") or "").strip().lower()  # resend | sendgrid | vazio = automático
+EMAIL_FROM = (os.getenv("EMAIL_FROM") or "").strip()
+RESEND_API_KEY = (os.getenv("RESEND_API_KEY") or "").strip()
+SENDGRID_API_KEY = (os.getenv("SENDGRID_API_KEY") or "").strip()
+

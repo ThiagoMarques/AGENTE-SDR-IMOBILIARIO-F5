@@ -67,6 +67,7 @@ def health() -> dict[str, Any]:
     except Exception as exc:
         detalhe = str(exc)
         fonte = "?"
+    from src.agenda import email_convite
     from src.agenda.calendario import status as status_agenda
 
     return {
@@ -78,6 +79,7 @@ def health() -> dict[str, Any]:
         "api_imoveis_ok": api_ok,
         "api_imoveis_detalhe": detalhe,
         "agenda": status_agenda(),
+        "email_convite": email_convite.provedor() if email_convite.configurado() else None,
     }
 
 

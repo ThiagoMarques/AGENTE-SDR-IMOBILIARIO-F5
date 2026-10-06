@@ -56,6 +56,15 @@ export default function DashboardPage() {
     { label: "Quentes", value: pri.quente ?? 0, color: "bg-orange-400" },
     { label: "Agendados", value: dash?.agendamentos ?? 0, color: "bg-navy" },
   ];
+  const captura = dash?.captura;
+  const pct = (n: number) => (total ? `${Math.round((n / total) * 100)}%` : "—");
+  const capturaItens = captura
+    ? [
+        { label: "Com nome", value: captura.com_nome },
+        { label: "Com e-mail", value: captura.com_email },
+        { label: "Convites enviados", value: captura.convites_enviados },
+      ]
+    : [];
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3 overflow-auto">
@@ -117,6 +126,21 @@ export default function DashboardPage() {
               </div>
             ))}
           </div>
+          {capturaItens.length > 0 && (
+            <div className="mt-4 border-t border-slate-100 pt-3">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Captura de contato</p>
+              <div className="flex flex-wrap gap-2">
+                {capturaItens.map((c) => (
+                  <div key={c.label} className="flex items-baseline gap-2 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
+                    <span className="text-lg font-bold text-slate-900">{c.value}</span>
+                    <span className="text-xs text-slate-500">
+                      {c.label} · {pct(c.value)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </Card.Content>
       </Card>
 
@@ -152,7 +176,9 @@ export default function DashboardPage() {
                         <Avatar.Fallback>{l.lead_id.slice(0, 2)}</Avatar.Fallback>
                       </Avatar>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold">{l.lead_id}</p>
+                        <p className="truncate text-sm font-semibold">
+                          {l.nome ? `${l.nome} · ${l.lead_id}` : l.lead_id}
+                        </p>
                         <p className="truncate text-xs text-slate-500">
                           {l.intencao || "—"} · {l.mensagens} msgs
                         </p>

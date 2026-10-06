@@ -21,7 +21,8 @@ def agenda_sem_credenciais(monkeypatch, tmp_path):
 
     monkeypatch.setattr(config, "AGENDA_TOKENS", tmp_path / "agenda_tokens.json")
     for nome in ("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REFRESH_TOKEN",
-                 "MS_CLIENT_ID", "MS_CLIENT_SECRET", "MS_REFRESH_TOKEN"):
+                 "MS_CLIENT_ID", "MS_CLIENT_SECRET", "MS_REFRESH_TOKEN",
+                 "EMAIL_PROVIDER", "EMAIL_FROM", "RESEND_API_KEY", "SENDGRID_API_KEY"):
         monkeypatch.setattr(config, nome, "")
     monkeypatch.setattr(config, "CRM_WEBHOOK_URL", "")
     calendario._ACCESS_TOKENS.clear()

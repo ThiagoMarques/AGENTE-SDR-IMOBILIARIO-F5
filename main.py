@@ -26,6 +26,13 @@ def checar_ambiente() -> None:
     agenda = status_agenda()
     ativas = [nome for nome, ok in agenda.items() if ok]
     print(f"  agenda: {', '.join(ativas) if ativas else 'só links/.ics (rode --agenda-auth google|outlook)'}")
+    from src.agenda import email_convite
+
+    print(
+        f"  convite por e-mail: {email_convite.provedor()}"
+        if email_convite.configurado()
+        else "  convite por e-mail: desabilitado (defina EMAIL_FROM + RESEND_API_KEY ou SENDGRID_API_KEY)"
+    )
     try:
         from src.db.session import init_db
 

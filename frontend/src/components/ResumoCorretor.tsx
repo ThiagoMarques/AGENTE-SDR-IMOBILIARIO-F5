@@ -10,6 +10,7 @@ import { PriorityChip } from "./PriorityChip";
  */
 
 const ROTULOS: Record<string, string> = {
+  nome: "Nome",
   intencao: "Intenção",
   regiao: "Região",
   quartos: "Quartos",
