@@ -57,11 +57,25 @@ def sugerir_correcao_email(email: str) -> str | None:
     return f"{usuario}@{parecido[0]}" if parecido else None
 
 
+_TRATAMENTOS = {"seu", "dona", "sr", "sra", "srta", "senhor", "senhora", "dr", "dra", "doutor", "doutora", "dom"}
+
+
+def vocativo(nome: str | None) -> str:
+    """Como chamar a pessoa: 'Ana Souza' -> 'Ana'; 'Seu João' -> 'Seu João' (não 'Seu')."""
+    palavras = (nome or "").split()
+    if not palavras:
+        return ""
+    if len(palavras) > 1 and _norm(palavras[0]).rstrip(".") in _TRATAMENTOS:
+        return " ".join(palavras[:2])
+    return palavras[0]
+
+
 def _formatar_nome(palavras: list[str]) -> str:
     return " ".join(p.lower() if p.lower() in _CONECTORES else p[:1].upper() + p[1:].lower() for p in palavras)
 
 
 def _nome_a_partir(trecho: str, *, exige_maiuscula: bool) -> str | None:
+    trecho = re.split(r"[.!?,;:\n]", trecho, maxsplit=1)[0]  # "Lucas. Tava pensando…" -> "Lucas"
     palavras = re.findall(r"[^\W\d_]+(?:'[^\W\d_]+)?", trecho)
     nome: list[str] = []
     for i, p in enumerate(palavras[:4]):

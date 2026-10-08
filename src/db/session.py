@@ -29,6 +29,7 @@ def init_db() -> None:
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE agendamentos ADD COLUMN IF NOT EXISTS inicio TIMESTAMPTZ"))
         conn.execute(text("ALTER TABLE agendamentos ADD COLUMN IF NOT EXISTS detalhes JSONB"))
+        conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS controle JSONB"))
 
 
 def get_session() -> Generator[Session, None, None]:

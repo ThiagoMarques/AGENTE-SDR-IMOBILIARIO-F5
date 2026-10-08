@@ -18,10 +18,19 @@ function Atalho({ href, children, download }: { href: string; children: React.Re
 }
 
 /** Visita marcada + atalhos "adicionar à agenda" (Google, Outlook, .ics). */
-export function AgendamentoCard({ agendamento, compacto = false }: { agendamento: Agendamento; compacto?: boolean }) {
+export function AgendamentoCard({
+  agendamento,
+  compacto = false,
+  paraLead = false,
+}: {
+  agendamento: Agendamento;
+  compacto?: boolean;
+  /** Esconde a agenda interna do corretor. */
+  paraLead?: boolean;
+}) {
   const ag = agendamento;
   const titulo = ag.tipo === "visita" ? "Visita marcada" : "Conversa marcada";
-  const naAgenda = ag.calendarios.filter((c) => c.status === "criado");
+  const naAgenda = paraLead ? [] : ag.calendarios.filter((c) => c.status === "criado");
 
   return (
     <div className={`rounded-[1.5rem] border border-lime/40 bg-white ${compacto ? "p-3" : "p-4"} shadow-sm`}>

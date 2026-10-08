@@ -25,6 +25,8 @@ class Lead(Base):
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
     )
     perfil: Mapped[dict] = mapped_column(JSONB, default=dict)
+    # Estado do fluxo (pergunta pendente, sugestões feitas): sem ele o agente perde o contexto entre mensagens.
+    controle: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     score: Mapped[int] = mapped_column(Integer, default=0)
     prioridade: Mapped[str] = mapped_column(String(16), default="frio", index=True)
 

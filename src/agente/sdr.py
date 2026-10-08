@@ -23,6 +23,7 @@ from typing import Any
 import config
 from src.agenda.calendario import horarios_ocupados
 from src.agenda.scheduler import (
+    ADIA_AGENDA,
     Escolha,
     agendamento_ativo,
     agendar,
@@ -53,7 +54,7 @@ from src.crm.cliente import (
 )
 from src.imoveis.catalogo import buscar_resultado, formatar_imovel
 from src.memoria import conversa as memoria
-from src.qualificacao.contato import afirmativo, extrair_nome, negativo, sugerir_correcao_email
+from src.qualificacao.contato import afirmativo, extrair_nome, negativo, sugerir_correcao_email, vocativo
 from src.qualificacao.fluxo_conversa import (
     pergunta_para,
     proximo_campo,
@@ -62,6 +63,7 @@ from src.qualificacao.fluxo_conversa import (
 from src.qualificacao.interpretador import (
     extrair_dados_deterministicos,
     interpretar_mensagem,
+    mensagem_fora_de_escopo,
     normalizar_texto,
     reconciliar_perfil,
 )
@@ -89,8 +91,16 @@ def _so_saudacao(texto: str) -> bool:
     }
 
 
+def _descrever_quartos(q: int) -> str:
+    if q == 0:
+        return "no estilo studio/kitnet"
+    return f"{q} quarto" + ("s" if q != 1 else "")
+
+
 def _quer_agendar(texto: str) -> bool:
     t = normalizar_texto(texto)
+    if ADIA_AGENDA.search(t):
+        return False
 
     return any(
         termo in t
@@ -214,8 +224,7 @@ def _descricao_alteracoes(
         _, novo = alteracoes["quartos"]
 
         if novo is not None:
-            q = int(novo)
-            partes.append(f"{q} quarto" + ("s" if q != 1 else ""))
+            partes.append(_descrever_quartos(int(novo)))
         elif alteracoes.get("quartos_flexivel"):
             partes.append("quantidade de quartos flexível")
 
@@ -247,15 +256,20 @@ def _descricao_alteracoes(
         _, novo = alteracoes["retorno_esperado"]
 
         if novo:
-            partes.append(f"retorno esperado de {novo}")
+            partes.append(f"retorno esperado de {str(novo).replace('% a.a.', '% ao ano')}")
 
     return partes
+
+
+_ABERTURAS_ANOTEI = ("Perfeito, anotei", "Show, anotado", "Beleza, anotei", "Ótimo, anotado")
+_ABERTURAS_ATUALIZEI = ("Certo, atualizei", "Pronto, atualizei", "Feito, atualizei")
 
 
 def _ack_alteracoes(
     alteracoes: dict[str, tuple[Any, Any]],
     *,
     correcao: bool,
+    variacao: int = 0,
 ) -> str | None:
     descricoes = _descricao_alteracoes(alteracoes)
 
@@ -269,7 +283,9 @@ def _ack_alteracoes(
         if not campo.endswith("_flexivel")
     )
 
-    prefixo = "Certo, atualizei" if (correcao or houve_substituicao) else "Perfeito, anotei"
+    # Variar a abertura evita o "Perfeito, anotei" idêntico a cada mensagem.
+    opcoes = _ABERTURAS_ATUALIZEI if (correcao or houve_substituicao) else _ABERTURAS_ANOTEI
+    prefixo = opcoes[variacao % len(opcoes)]
 
     if len(descricoes) == 1:
         return f"{prefixo}: {descricoes[0]}."
@@ -300,42 +316,67 @@ def _resposta_duvida_imobiliaria(
     mensagem: str,
     *,
     proxima_pergunta: str | None,
-) -> str:
-    """Responde dúvidas comuns sem inventar características de imóveis."""
+) -> str | None:
+    """Responde dúvidas comuns sem inventar características de imóveis.
+
+    None quando o tema não é conhecido: a mensagem segue o fluxo normal
+    ("tem algo em Moema até 1 milhão?" é busca, não dúvida).
+    """
     t = normalizar_texto(mensagem)
 
-    if "financi" in t:
+    if "itbi" in t:
         resposta = (
-            "Sim, podemos considerar imóveis com possibilidade de financiamento, "
-            "mas as condições dependem do imóvel e da análise da instituição financeira."
+            "O ITBI é o imposto municipal pago na compra do imóvel. Fica em torno de 2% a 3% "
+            "do valor, conforme a cidade, e é pago antes da escritura."
+        )
+
+    elif any(x in t for x in ("escritura", "cartorio", "registro", "documentacao")):
+        resposta = (
+            "Na compra, além do valor do imóvel, entram a escritura e o registro em cartório, "
+            "que somam algo perto de 1% a 2%. O corretor te passa a lista de documentos certinha."
+        )
+
+    elif "fgts" in t:
+        resposta = (
+            "Dá pra usar o FGTS na entrada ou para amortizar o financiamento, desde que seja "
+            "o seu primeiro imóvel residencial na cidade e ele se enquadre nas regras do programa."
+        )
+
+    elif any(x in t for x in ("financi", "entrada", "juros")):
+        resposta = (
+            "Dá sim. Em geral os bancos pedem uma entrada de uns 20% e financiam o resto; "
+            "a taxa e o prazo dependem da sua análise de crédito."
+        )
+
+    elif any(x in t for x in ("fiador", "caucao", "seguro fianca")):
+        resposta = (
+            "No aluguel, as garantias mais comuns são fiador, caução (normalmente até 3 aluguéis) "
+            "ou seguro-fiança. Cada proprietário aceita uma ou mais delas."
+        )
+
+    elif any(x in t for x in ("rentabilidade", "rendimento", "retorno", "valoriza")):
+        resposta = (
+            "Para aluguel residencial, a rentabilidade costuma ficar entre 4% e 6% ao ano sobre "
+            "o valor do imóvel, sem contar a valorização. Varia bastante por bairro."
         )
 
     elif any(x in t for x in ("garagem", "vaga", "pet", "cachorro", "gato", "elevador")):
         resposta = (
-            "Isso depende do imóvel específico. Quando eu tiver as opções da sua busca, "
-            "essa característica precisa ser confirmada nos dados do imóvel."
+            "Isso muda de imóvel pra imóvel. Quando eu te mostrar as opções, "
+            "confirmo esse ponto em cada uma."
         )
 
     elif any(x in t for x in ("condominio", "iptu")):
         resposta = (
-            "Esse valor varia por imóvel. Eu só devo informar quando ele estiver disponível "
-            "nos dados da opção apresentada."
-        )
-
-    elif any(x in t for x in ("visita", "corretor", "agendar")):
-        resposta = (
-            "Consigo encaminhar uma visita ou conversa com um corretor assim que tivermos "
-            "o essencial da sua busca."
+            "Condomínio e IPTU variam bastante de um imóvel pro outro. "
+            "Assim que eu te mostrar as opções, te passo os valores de cada uma."
         )
 
     else:
-        resposta = (
-            "Posso te ajudar com essa dúvida dentro do contexto imobiliário. "
-            "Quando ela depender de um imóvel específico, eu só confirmo usando os dados da opção."
-        )
+        return None
 
     if proxima_pergunta:
-        resposta += f" Para seguir com a busca: {proxima_pergunta}"
+        resposta += f"\n\nE me conta: {proxima_pergunta[0].lower()}{proxima_pergunta[1:]}"
 
     return resposta
 
@@ -425,13 +466,24 @@ def _tipo_agendamento(texto: str) -> str:
 
 def _imovel_do_contexto(estado: dict[str, Any], texto: str) -> str | None:
     m = _ID_IMOVEL.search(texto)
-    candidatos = ([m.group(0).upper()] if m else []) + list(estado.get("imoveis_sugeridos") or [])
+    sugeridos = list(estado.get("imoveis_sugeridos") or [])
+    recentes = [m.get("texto") or "" for m in (estado.get("mensagens") or [])[-6:] if m.get("papel") == "lead"]
+    # "quero ver a de Pinheiros": o bairro ou a rua citados escolhem entre as opções mostradas.
+    citados = []
+    for t in (normalizar_texto(x) for x in [texto, *reversed(recentes)]):
+        for imovel_id in sugeridos:
+            imovel = obter_imovel(imovel_id) or {}
+            nomes = (imovel.get("bairro"), imovel.get("regiao"), str(imovel.get("endereco") or "").split(",")[0])
+            if any(n and re.search(rf"\b{re.escape(normalizar_texto(str(n)))}\b", t) for n in nomes):
+                citados.append(imovel_id)
+        if citados:
+            break
+    candidatos = ([m.group(0).upper()] if m else []) + citados[:1] + sugeridos
     return next((c for c in candidatos if obter_imovel(c)), None)
 
 
 def _primeiro_nome(estado: dict[str, Any]) -> str:
-    nome = str((estado.get("perfil") or {}).get("nome") or "").strip()
-    return nome.split()[0] if nome else ""
+    return vocativo(str((estado.get("perfil") or {}).get("nome") or "").strip())
 
 
 def _pedir_nome_se_primeira(resposta: str, perfil: dict[str, Any], *, primeira: bool) -> str:
@@ -505,7 +557,7 @@ def _tratar_contato(estado: dict[str, Any], mensagem: str) -> tuple[dict[str, An
         )
         sugestao = None if ja_sugerido else sugerir_correcao_email(email)
         if sugestao:
-            prazer = f"Prazer, {nome.split()[0]}! " if nome else ""
+            prazer = f"Prazer, {vocativo(nome)}! " if nome else ""
             resposta = {
                 "resposta": f"{prazer}Só pra confirmar: seu e-mail é {sugestao}? (Você digitou {email}.)",
                 "evento": None,
@@ -734,10 +786,7 @@ def _resposta_resultado(
         partes: list[str] = []
 
         if match == "aproximado":
-            if motivo:
-                partes.append(f"Não encontrei o filtro exato. {motivo}.")
-            else:
-                partes.append("Não encontrei o filtro exato, mas achei opções próximas.")
+            partes.append(_frase_aproximacao(motivo, len(sugestoes[:3])))
         else:
             partes.append("Encontrei estas opções para o seu perfil:")
 
@@ -749,13 +798,182 @@ def _resposta_resultado(
         return "\n\n".join(partes), sugestoes, True, match, motivo
 
     return (
-        "Não encontrei uma opção com esse conjunto de filtros agora. "
-        "Podemos ajustar região, valor ou quantidade de quartos — o que você prefere mudar?",
+        _resposta_sem_resultado(perfil, resultado.get("pistas") or {}),
         [],
         False,
         "vazio",
         motivo,
     )
+
+
+def _no_lugar(regiao: str) -> str:
+    """'na Zona Sul', 'no Centro', 'em Moema'."""
+    r = regiao.strip().lower()
+    nome = regiao.strip().title()
+    if r.startswith(("zona ", "asa ", "vila ")):
+        return f"na {nome}"
+    if r in {"centro", "lago sul", "lago norte", "brooklin", "itaim bibi"}:
+        return f"no {nome}"
+    return f"em {nome}"
+
+
+def _lista_com_e(itens: list[str]) -> str:
+    return itens[0] if len(itens) == 1 else ", ".join(itens[:-1]) + f" e {itens[-1]}"
+
+
+def _frase_aproximacao(motivo: str, quantidade: int) -> str:
+    """'está em X; tem 1 quarto' (fragmentos do catálogo) -> frase de corretor."""
+    abertura = (
+        "Não achei exatamente o que você pediu, mas tenho "
+        + ("uma opção bem próxima." if quantidade == 1 else "opções bem próximas.")
+    )
+    pedacos = [p.strip() for p in (motivo or "").split(";") if p.strip()]
+    if not pedacos:
+        return abertura
+    texto = _lista_com_e(pedacos)
+    if re.match(r"(está|fica|tem|é) ", texto):
+        sujeito = "Ela" if quantidade == 1 else "A primeira"
+        return f"{abertura} {sujeito} {texto}."
+    return f"{abertura} {texto[0].upper()}{texto[1:]}."
+
+
+def _resposta_sem_resultado(perfil: dict[str, Any], pistas: dict[str, Any]) -> str:
+    """Diz em palavras simples o que não achou e sugere o ajuste com mais chance de dar certo."""
+    regiao = None if perfil.get("regiao_flexivel") else perfil.get("regiao")
+    quartos = None if perfil.get("quartos_flexivel") else perfil.get("quartos")
+    preco = perfil.get("faixa_preco") or perfil.get("ticket")
+
+    pedido = []
+    if quartos is not None:
+        pedido.append(f"com {_descrever_quartos(int(quartos))}" if quartos else _descrever_quartos(0))
+    if regiao:
+        pedido.append(_no_lugar(str(regiao)))
+    if preco:
+        pedido.append(f"até {_fmt_moeda(float(preco))}")
+    abertura = f"Não encontrei nada {' '.join(pedido)} por enquanto." if pedido else "Não encontrei o que você procura por enquanto."
+
+    menor = pistas.get("menor_preco_regiao")
+    outras = [o["nome"] for o in pistas.get("outras_regioes") or []]
+
+    if perfil.get("regiao_flexivel"):
+        abertura = f"Procurei em todas as regiões que atendo e não encontrei nada {' '.join(pedido)}." if pedido else (
+            "Procurei em todas as regiões que atendo e não encontrei o que você procura."
+        )
+        if menor and preco and menor > float(preco):
+            return f"{abertura} O mais em conta que tenho hoje sai por {_fmt_moeda(menor)}. Quer que eu busque até esse valor?"
+        return f"{abertura} Vamos ajustar o valor ou a quantidade de quartos?"
+
+    if regiao and menor and preco and menor > float(preco):
+        texto = f"{abertura} Por lá, o mais em conta que tenho hoje sai por {_fmt_moeda(menor)}."
+        if outras:
+            return f"{texto} Dentro do seu valor, tenho opções {_lista_com_e([_no_lugar(o) for o in outras])}. Quer que eu procure por lá?"
+        return f"{texto} Dá pra aumentar um pouco o valor, ou prefere que eu olhe outra região?"
+
+    if outras:
+        return f"{abertura} Dentro do seu valor, tenho opções {_lista_com_e([_no_lugar(o) for o in outras])}. Quer que eu procure por lá?"
+
+    if regiao:
+        return f"{abertura} Vamos ajustar a região ou o valor?"
+    return f"{abertura} Vamos ajustar o valor ou a quantidade de quartos?"
+
+
+_DEIXO_PRO_CORRETOR = "Essa eu deixo pro corretor te responder, pra não te passar nada errado."
+
+_INTERROGATIVAS = re.compile(r"^(?:como|quanto|quanta|quantos|quantas|qual|quais|quando|onde|por ?que|o que|tem|posso|da pra|e se)\b")
+
+
+def _parece_pergunta(mensagem: str) -> bool:
+    return "?" in mensagem or bool(_INTERROGATIVAS.match(normalizar_texto(mensagem)))
+
+
+# "Tem mais opções?" é sobre a busca, que o agente responde; não é dúvida pro corretor.
+_SOBRE_OPCOES = re.compile(
+    r"\b(?:opc\w*|alternativ\w*)\b|\b(?:mais|outr[ao]s?)\s+(?:imove\w*|apartament\w*|aptos?|casas?)\b"
+)
+
+_ESPERA_AVISO = re.compile(
+    r"\b(?:me avis[ae]|avisa (?:ai|quando)|vou esperar|vou aguardar|aguardo|fico no aguardo|"
+    r"quando (?:tiver|aparecer|surgir)|se (?:tiver|aparecer|surgir) algo)\b"
+)
+
+_EXEMPLOS = {
+    "intencao": "\"comprar\", \"alugar\" ou \"investir\"",
+    "regiao": "\"Zona Sul\", \"Moema\" ou \"Asa Norte\"",
+    "faixa_preco": "\"até 800 mil\" ou \"3 mil por mês\"",
+    "quartos": "\"2 quartos\"",
+    "urgencia": "\"urgente\", \"uns 6 meses\" ou \"sem pressa\"",
+    "ticket": "\"500 mil\"",
+    "perfil": "\"renda\" ou \"valorização\"",
+    "retorno_esperado": "\"6% ao ano\"",
+}
+
+
+def _falas_recentes_agente(estado: dict[str, Any], n: int) -> list[str]:
+    falas = [str(m.get("texto") or "") for m in estado.get("mensagens") or [] if m.get("papel") != "lead"]
+    return falas[-n:]
+
+
+def _ultima_fala_agente(estado: dict[str, Any]) -> str:
+    return next(iter(_falas_recentes_agente(estado, 1)), "")
+
+
+def _insistir_sem_resultado(
+    perfil: dict[str, Any],
+    controle: dict[str, Any],
+    mensagem: str,
+    *,
+    pediu_outra_regiao: bool = False,
+) -> str:
+    """Resposta sem dado novo depois de uma busca vazia: cada insistência avança, nunca repete."""
+    usadas = controle.setdefault("insistencias_vazia", [])
+    vazia = controle.get("ultima_busca_vazia")
+    preco = controle.get("preco_sugerido") if vazia else None
+    regiao = None if perfil.get("regiao_flexivel") else perfil.get("regiao")
+
+    if _ESPERA_AVISO.search(normalizar_texto(mensagem)):
+        if controle.get("avisar_novidades"):
+            return "Fechado! Qualquer novidade a gente te chama. Até mais!"
+        controle["avisar_novidades"] = True
+        return (
+            "Combinado! Deixo anotado pro corretor te avisar assim que aparecer algo nesse perfil. "
+            "Se quiser mudar a busca antes disso, é só me falar."
+        )
+
+    if vazia and pediu_outra_regiao and perfil.get("regiao_flexivel") and "todas" not in usadas:
+        usadas.append("todas")
+        texto = "Já procurei em todas as regiões que atendo, então mudar de região não vai trazer opção nova."
+        if preco:
+            controle["oferta_preco"] = preco
+            return f"{texto} O que destrava a busca é o valor: a partir de {_fmt_moeda(float(preco))} já tenho opção. Quer que eu busque até esse valor?"
+        return f"{texto} Prefere ajustar o valor ou a quantidade de quartos?"
+
+    if not vazia and "mesmas" not in usadas:
+        chave = "mesmas"
+    elif not usadas and preco and not negativo(mensagem):
+        chave = "preco"
+    elif "mudar" not in usadas:
+        chave = "mudar"
+    else:
+        chave = "fecho" if usadas[-1] != "fecho" else "fecho2"
+    usadas.append(chave)
+
+    if chave == "mesmas":
+        return (
+            "Por enquanto, essas que te mandei são as opções mais próximas do que você pediu. "
+            "Quer marcar uma visita a alguma delas, ou prefere que eu ajuste o valor, a região ou os quartos?"
+        )
+    if chave == "preco":
+        controle["oferta_preco"] = preco
+        lugar = f" {_no_lugar(str(regiao))}" if regiao else ""
+        return f"Uma ideia: subindo o valor para {_fmt_moeda(float(preco))}, já tenho opção{lugar}. Quer que eu te mostre?"
+    if chave == "mudar":
+        return "Pra eu achar algo pra você, me diz o que prefere mudar: o valor, a região ou a quantidade de quartos."
+    if chave == "fecho":
+        return (
+            "Tudo bem! Quando quiser, é só me dizer um novo valor, região ou número de quartos "
+            "que eu busco de novo pra você."
+        )
+    return "Tô por aqui! Se mudar alguma coisa na busca, me avisa que eu procuro na hora."
 
 
 def _finalizar(
@@ -774,7 +992,7 @@ def _finalizar(
     nome_novo: str = "",
     pedir_nome: bool = False,
 ) -> dict[str, Any]:
-    primeiro = nome_novo.split()[0] if nome_novo else ""
+    primeiro = vocativo(nome_novo)
     if primeiro and primeiro not in resposta:
         resposta = f"Prazer, {primeiro}! {resposta}"
     resposta = _pedir_nome_se_primeira(resposta, estado.get("perfil") or {}, primeira=pedir_nome)
@@ -874,6 +1092,29 @@ def processar_mensagem(
     dados = interpretacao.get("dados") or {}
     usou_llm = bool(interpretacao.get("usou_llm"))
 
+    # "sim"/"não" para "tenho opções em X, quer que eu procure por lá?"
+    # ou para "subindo o valor para R$ Y, já tenho opção. Quer que eu te mostre?"
+    sugeridas = controle.pop("regioes_sugeridas", None) or []
+    oferta_preco = controle.pop("oferta_preco", None)
+    if oferta_preco and not dados and afirmativo(mensagem):
+        campo_preco = "ticket" if perfil_base.get("intencao") == "investimento" else "faixa_preco"
+        dados = {campo_preco: float(oferta_preco)}
+        categoria = "dados"
+    elif sugeridas and dados.get("regiao_flexivel") and not dados.get("regiao"):
+        dados = {**dados, "regiao": sugeridas[0]["regiao"], "regiao_flexivel": False}
+    elif sugeridas and not dados:
+        if afirmativo(mensagem):
+            dados = {"regiao": sugeridas[0]["regiao"], "regiao_flexivel": False}
+            categoria = "dados"
+        elif negativo(mensagem):
+            return _finalizar(
+                estado=estado,
+                lead_id=lead_id,
+                resposta="Sem problema. Prefere ajustar o valor ou a quantidade de quartos?",
+                qual_antes=qual_antes,
+                usou_llm=usou_llm,
+            )
+
     # Fora de escopo: preserva 100% do perfil e da etapa.
     if categoria == "fora_escopo" and not dados and not (email_novo or nome_novo):
         proxima = pergunta_para(proximo_campo(perfil_base))
@@ -897,6 +1138,11 @@ def processar_mensagem(
 
     estado["perfil"] = perfil
 
+    # "quero alugar na Asa Norte... e vai chover amanhã?": usa os dados e reconhece o resto.
+    ressalva = "Sobre o resto eu fico devendo, mas da sua busca eu cuido! " if (
+        alteracoes and mensagem_fora_de_escopo(mensagem)
+    ) else ""
+
     ultimo_alterado = _campo_principal_alterado(alteracoes)
 
     if ultimo_alterado:
@@ -909,13 +1155,28 @@ def processar_mensagem(
 
     # Dúvida imobiliária no meio do fluxo:
     # responde e retoma o próximo campo sem perder qualquer dado fornecido junto.
+    pergunta_sem_tema = False
     if categoria == "duvida_imobiliaria":
         pergunta = pergunta_para(proximo)
         resposta = _resposta_duvida_imobiliaria(
             mensagem,
             proxima_pergunta=pergunta,
         )
+        if resposta and any(resposta.split("\n\n")[0] in f for f in _falas_recentes_agente(estado, 3)):
+            resposta = None  # já explicou isso agora há pouco; repetir soa robótico
+        if resposta is None:
+            pergunta_sem_tema = (
+                not alteracoes
+                and _parece_pergunta(mensagem)
+                and not _SOBRE_OPCOES.search(normalizar_texto(mensagem))
+            )
+            categoria = "dados" if alteracoes else "outro"
+        else:
+            ack = _ack_alteracoes(alteracoes, correcao=correcao, variacao=len(estado["mensagens"]) // 2)
+            if ack:
+                resposta = f"{ack}\n\n{resposta}"
 
+    if categoria == "duvida_imobiliaria":
         return _finalizar(
             estado=estado,
             lead_id=lead_id,
@@ -930,19 +1191,31 @@ def processar_mensagem(
         ack = _ack_alteracoes(
             alteracoes,
             correcao=correcao,
+            variacao=len(estado["mensagens"]) // 2,
         )
 
         pergunta = pergunta_para(proximo) or "Pode me contar um pouco mais sobre sua busca?"
 
         if ack:
-            resposta = f"{ack}\n\n{pergunta}"
+            resposta = f"{ressalva}{ack}\n\n{pergunta}"
         elif email_novo:
             resposta = f"Anotei seu e-mail. {pergunta}"
-        elif categoria == "outro" and not nome_novo:
+        elif proximo == "retorno_esperado" and (
+            prazo := re.search(r"\b(\d+)\s*anos?\b", normalizar_texto(mensagem))
+        ):
             resposta = (
-                "Não consegui identificar esse dado com segurança. "
-                f"{pergunta}"
+                f"Entendi, pensando num prazo de {prazo.group(1)} anos. "
+                "E de retorno, quanto você espera? Por exemplo, 6% ao ano."
             )
+        elif _quer_agendar(mensagem) and categoria == "outro":
+            resposta = f"Consigo marcar, sim! Antes, só preciso saber: {pergunta[0].lower()}{pergunta[1:]}"
+        elif pergunta_sem_tema and not _ultima_fala_agente(estado).startswith(_DEIXO_PRO_CORRETOR):
+            resposta = f"{_DEIXO_PRO_CORRETOR} {pergunta}"
+        elif categoria == "outro" and not nome_novo:
+            if _ultima_fala_agente(estado).startswith("Desculpa, não entendi bem.") and proximo in _EXEMPLOS:
+                resposta = f"{pergunta} Pode responder do seu jeito, por exemplo: {_EXEMPLOS[proximo]}."
+            else:
+                resposta = f"Desculpa, não entendi bem. {pergunta}"
         else:
             resposta = pergunta
 
@@ -960,7 +1233,8 @@ def processar_mensagem(
     controle["campo_aguardando"] = None
     agendado = _visita_marcada(estado)
 
-    if _quer_agendar(mensagem):
+    # Se a busca mudou na mesma mensagem, mostra o resultado primeiro; a oferta de visita vem no fecho.
+    if _quer_agendar(mensagem) and not alteracoes:
         if agendado:
             resposta = (
                 f"Sua visita já está marcada para {agendado}. "
@@ -976,6 +1250,24 @@ def processar_mensagem(
             qual_antes=qual_antes,
             usou_llm=usou_llm,
             nome_novo=nome_novo,
+        )
+
+    # Sem dado novo, a busca daria o mesmo resultado: em vez de repetir, avança a conversa.
+    if not alteracoes and (controle.get("ultima_busca_vazia") or controle.get("ultimos_ids")):
+        resposta = _insistir_sem_resultado(
+            perfil,
+            controle,
+            mensagem,
+            pediu_outra_regiao=bool(dados.get("regiao_flexivel")),
+        )
+        if pergunta_sem_tema and not resposta.startswith("Já procurei"):
+            resposta = f"{_DEIXO_PRO_CORRETOR} {resposta}"
+        return _finalizar(
+            estado=estado,
+            lead_id=lead_id,
+            resposta=resposta,
+            qual_antes=qual_antes,
+            usou_llm=usou_llm,
         )
 
     # "não gostei"/"não" após a busca não deve repetir a mesma busca sem sentido.
@@ -1003,7 +1295,7 @@ def processar_mensagem(
 
     if agendado:
         fecho = f"Sua visita segue marcada para {agendado}. Quer ver mais alguma opção até lá?"
-    elif score_estado(estado).get("pronto_para_agendar"):
+    elif score_estado(estado).get("pronto_para_agendar") and not ADIA_AGENDA.search(normalizar_texto(mensagem)):
         fecho = _oferta_de_visita(estado, apos_opcoes=True)
     else:
         fecho = _FECHO_RESULTADO
@@ -1016,6 +1308,24 @@ def processar_mensagem(
         resultado,
         fecho=fecho,
     )
+
+    controle["ultima_busca_vazia"] = match == "vazio"
+    controle["insistencias_vazia"] = []
+    controle["ultimos_ids"] = [im.get("id") for im in sugestoes if im.get("id")] if mostrar else []
+    if match == "vazio":
+        pistas = resultado.get("pistas") or {}
+        controle["regioes_sugeridas"] = pistas.get("outras_regioes") or []
+        preco_atual = perfil.get("faixa_preco") or perfil.get("ticket")
+        menor = pistas.get("menor_preco_regiao")
+        controle["preco_sugerido"] = menor if menor and preco_atual and menor > float(preco_atual) else None
+        if perfil.get("regiao_flexivel") and controle["preco_sugerido"]:
+            controle["oferta_preco"] = controle["preco_sugerido"]
+            controle["insistencias_vazia"] = ["preco"]
+    else:
+        ack = _ack_alteracoes(alteracoes, correcao=correcao, variacao=len(estado["mensagens"]) // 2)
+        if ack:
+            resposta = f"{ack}\n\n{resposta}"
+    resposta = f"{ressalva}{resposta}"
 
     estado["imoveis_sugeridos"] = [
         imovel.get("id")

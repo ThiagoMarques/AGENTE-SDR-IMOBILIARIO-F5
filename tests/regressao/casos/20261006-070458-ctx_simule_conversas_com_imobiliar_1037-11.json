@@ -1,0 +1,98 @@
+{
+  "persona": "ctx_simule_conversas_com_imobiliar_1037",
+  "persona_nome": "Simule conversas com imobiliárias que",
+  "persona_descricao": "Simule conversas com imobiliárias que procuram apartamentos sem quartos",
+  "criado_em": "2026-10-06T07:04:58",
+  "mensagens_lead": [
+    "Oi, tudo bom? Tô procurando um apê bem pequeno pra alugar, tipo kitnet ou estúdio. Preferência na Zona Sul do Rio, até uns 1.500 por mês. Tem algo assim?",
+    "Oi! Pode me chamar de Lucas. Tô pensando em até 1.500 mesmo, bem nessa faixa. Vc tem algo pra me mostrar?",
+    "Ah, eu to procurando um lugar sem quarto, tipo kitnet ou estúdio mesmo. Não precisa ter quarto separado, sabe?",
+    "É isso, studio! Vc tem alguma opção nessa faixa de preço?",
+    "Não tem mais nada pra responder não? Vamo lá, qual a boa?",
+    "Ué, já falei que é studio! Tem algum disponível ou não?",
+    "Já falei! Um studio, sem quartos. Tem opção ou não?",
+    "Ah, to sem pressa, mas queria ver algo logo. Tem alguma opção pra me mostrar?",
+    "Pô, que pena! Será que tem em outra região? Tipo Lapa ou Botafogo, até 1.500 também?"
+  ],
+  "falhas_detectadas": [
+    {
+      "tipo": "pergunta_em_loop",
+      "turno": 4,
+      "descricao": "Mesma pergunta 3 vezes seguidas: \"Quantos quartos você procura?\""
+    }
+  ],
+  "conversa_original": [
+    {
+      "papel": "lead",
+      "texto": "Oi, tudo bom? Tô procurando um apê bem pequeno pra alugar, tipo kitnet ou estúdio. Preferência na Zona Sul do Rio, até uns 1.500 por mês. Tem algo assim?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Perfeito, anotei: buscar para alugar, região Zona Sul e apartamento.\n\nQual faixa de valor você tem em mente?\n\nAh, e como posso te chamar?"
+    },
+    {
+      "papel": "lead",
+      "texto": "Oi! Pode me chamar de Lucas. Tô pensando em até 1.500 mesmo, bem nessa faixa. Vc tem algo pra me mostrar?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Prazer, Lucas! Pronto, atualizei: até R$ 1.500.\n\nQuantos quartos você procura?"
+    },
+    {
+      "papel": "lead",
+      "texto": "Ah, eu to procurando um lugar sem quarto, tipo kitnet ou estúdio mesmo. Não precisa ter quarto separado, sabe?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Feito, atualizei: studio.\n\nQuantos quartos você procura?"
+    },
+    {
+      "papel": "lead",
+      "texto": "É isso, studio! Vc tem alguma opção nessa faixa de preço?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Ótimo, anotado: foco em Lucas.\n\nQuantos quartos você procura?"
+    },
+    {
+      "papel": "lead",
+      "texto": "Não tem mais nada pra responder não? Vamo lá, qual a boa?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Essa eu deixo pro corretor te responder, pra não te passar nada errado. Quantos quartos você procura?"
+    },
+    {
+      "papel": "lead",
+      "texto": "Ué, já falei que é studio! Tem algum disponível ou não?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Desculpa, não entendi bem. Quantos quartos você procura?"
+    },
+    {
+      "papel": "lead",
+      "texto": "Já falei! Um studio, sem quartos. Tem opção ou não?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Certo, atualizei: 0 quartos.\n\nVocê está com prazo mais curto, médio ou sem pressa por enquanto?"
+    },
+    {
+      "papel": "lead",
+      "texto": "Ah, to sem pressa, mas queria ver algo logo. Tem alguma opção pra me mostrar?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Não encontrei nada com na Zona Sul até R$ 1.500 por enquanto. Vamos ajustar a região ou o valor?"
+    },
+    {
+      "papel": "lead",
+      "texto": "Pô, que pena! Será que tem em outra região? Tipo Lapa ou Botafogo, até 1.500 também?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Procurei em todas as regiões que atendo e não encontrei nada com até R$ 1.500. O mais em conta que tenho hoje sai por R$ 2.100. Quer que eu busque até esse valor?"
+    }
+  ]
+}

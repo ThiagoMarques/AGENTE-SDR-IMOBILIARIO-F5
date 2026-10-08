@@ -1,0 +1,60 @@
+{
+  "persona": "investidor_direto",
+  "criado_em": "2026-10-06T06:46:31",
+  "mensagens_lead": [
+    "Oi! Tô buscando opções de investimento em imóveis. Tenho uns R$ 200 mil pra investir e quero algo que me traga cerca de 6% de retorno ao ano. O que vcs têm pra me oferecer?",
+    "Quero foco em renda recorrente. Onde vcs têm imóveis com essa rentabilidade?",
+    "Quais bairros vcs recomendam que têm essa faixa de rentabilidade?",
+    "Parece que vc repetiu a mesma coisa. Me fala de bairros específicos, por favor!",
+    "Bacana! Quero ver a de Pinheiros. 07/10/2026 às 14:00 serve. Meu e-mail é investidor@exemplo.com."
+  ],
+  "falhas_detectadas": [
+    {
+      "tipo": "repetiu_resposta",
+      "turno": 3,
+      "descricao": "O agente mandou exatamente a mesma resposta duas vezes seguidas."
+    }
+  ],
+  "conversa_original": [
+    {
+      "papel": "lead",
+      "texto": "Oi! Tô buscando opções de investimento em imóveis. Tenho uns R$ 200 mil pra investir e quero algo que me traga cerca de 6% de retorno ao ano. O que vcs têm pra me oferecer?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Para aluguel residencial, a rentabilidade costuma ficar entre 4% e 6% ao ano sobre o valor do imóvel, sem contar a valorização. Varia bastante por bairro.\n\nE me conta: seu foco é renda recorrente, valorização ou outro objetivo?"
+    },
+    {
+      "papel": "lead",
+      "texto": "Quero foco em renda recorrente. Onde vcs têm imóveis com essa rentabilidade?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Para aluguel residencial, a rentabilidade costuma ficar entre 4% e 6% ao ano sobre o valor do imóvel, sem contar a valorização. Varia bastante por bairro."
+    },
+    {
+      "papel": "lead",
+      "texto": "Quais bairros vcs recomendam que têm essa faixa de rentabilidade?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Para aluguel residencial, a rentabilidade costuma ficar entre 4% e 6% ao ano sobre o valor do imóvel, sem contar a valorização. Varia bastante por bairro."
+    },
+    {
+      "papel": "lead",
+      "texto": "Parece que vc repetiu a mesma coisa. Me fala de bairros específicos, por favor!"
+    },
+    {
+      "papel": "agente",
+      "texto": "Perfeito, anotei: região Moema.\n\nNão achei exatamente o que você pediu, mas tenho opções bem próximas. A primeira está em República, na mesma cidade e encaixa com folga no orçamento.\n\nBR-SP-008 — Av. São João, 300 — Centro (aluguel, investimento)\n  São Paulo/SP | 1 quarto | 28 m² | BRL 2.100\n\nBR-SP-003 — Rua dos Pinheiros, 850 — Pinheiros (aluguel, investimento)\n  São Paulo/SP | 1 quarto | 32 m² | BRL 4.200\n\nSe quiser, já marco uma visita a alguma delas com um corretor.\nTenho estes horários:\n• 07/10/2026 10:00\n• 07/10/2026 14:00\n• 07/10/2026 16:00\nQual funciona melhor para você? Se preferir outro dia/horário, me fala.\nSe quiser, já me passa seu e-mail que eu te mando o convite da visita (uso só para isso e para o contato do corretor)."
+    },
+    {
+      "papel": "lead",
+      "texto": "Bacana! Quero ver a de Pinheiros. 07/10/2026 às 14:00 serve. Meu e-mail é investidor@exemplo.com."
+    },
+    {
+      "papel": "agente",
+      "texto": "Fechado! Visita marcada para quarta, 07/10 às 14h.\n\nImóvel: Kitnet — Centro — Av. São João, 300 — Centro.\n\nAnotei seu e-mail (investidor@exemplo.com). Deixei aqui embaixo os atalhos para salvar na agenda.\n\nSe precisar mudar, é só me avisar."
+    }
+  ]
+}

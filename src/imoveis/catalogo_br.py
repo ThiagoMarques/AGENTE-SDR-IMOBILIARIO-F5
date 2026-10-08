@@ -336,6 +336,16 @@ def _mesma_cidade_macro(regiao_a: str, regiao_b: str, cidade_im: str) -> bool:
     return False
 
 
+def _perto(regiao_n: str) -> str:
+    """'perto da Zona Leste', 'perto do Centro', 'perto de Moema'."""
+    nome = regiao_n.title()
+    if regiao_n.startswith(("zona ", "asa ", "vila ")):
+        return f"perto da {nome}"
+    if regiao_n in {"centro", "lago sul", "lago norte", "brooklin", "itaim bibi"}:
+        return f"perto do {nome}"
+    return f"perto de {nome}"
+
+
 def _motivos_aproximacao(
     *,
     regiao_n: str,
@@ -351,17 +361,18 @@ def _motivos_aproximacao(
 
     if regiao_n and not reg_exata:
         if _eh_vizinho(regiao_n, reg_im):
-            motivos.append(f"fica perto de {regiao_n} ({imovel.get('bairro') or reg_im})")
+            motivos.append(f"fica {_perto(regiao_n)} ({imovel.get('bairro') or reg_im})")
         else:
-            motivos.append(f"está em {imovel.get('bairro') or reg_im}, na mesma praça")
+            motivos.append(f"está em {imovel.get('bairro') or reg_im}, na mesma cidade")
 
     if quartos_min is not None and q_im != quartos_min:
+        qtd = f"{q_im} quarto" + ("s" if q_im != 1 else "")
         if q_im == quartos_min - 1:
-            motivos.append(f"tem {q_im} quartos (um a menos do que você pediu)")
+            motivos.append(f"tem {qtd} (um a menos do que você pediu)")
         elif q_im == quartos_min + 1:
-            motivos.append(f"tem {q_im} quartos (um a mais)")
+            motivos.append(f"tem {qtd} (um a mais)")
         else:
-            motivos.append(f"tem {q_im} quartos")
+            motivos.append(f"tem {qtd}")
 
     if preco_max is not None and preco > preco_max:
         pct = int(round((preco / preco_max - 1) * 100))
@@ -595,10 +606,50 @@ def _fallback_estoque(
             + ("s" if mx != 1 else "")
         )
     elif regiao_n:
-        motivo = f"o que tenho disponível perto de {regiao_n}"
+        motivo = f"o que tenho disponível {_perto(regiao_n)}"
     else:
         motivo = "o que tenho disponível agora no estoque"
     return top, motivo
+
+
+def _pistas_sem_resultado(
+    *,
+    intencao: str | None,
+    regiao: str | None,
+    preco_max: float | None,
+) -> dict[str, Any]:
+    """O que existe de verdade para sugerir um ajuste concreto quando nada serve."""
+    intencao_n = (intencao or "").strip().lower()
+    regiao_n = (regiao or "").strip().lower()
+    disponiveis = [im for im in CATALOGO_BR if _ops_ok(im, intencao_n)]
+    if intencao_n == "aluguel":
+        # O catálogo tem um preço só: em "compra e aluguel" ele é o de venda.
+        disponiveis = [im for im in disponiveis if float(im["preco"]) <= 50_000]
+
+    na_regiao = [im for im in disponiveis if not regiao_n or _regiao_bate(im, regiao_n)]
+    menor_preco = min((float(im["preco"]) for im in na_regiao), default=None)
+    if not regiao_n:
+        na_regiao = []
+
+    # Quem busca na Asa Sul não quer sugestão em Pinheiros: só a mesma cidade.
+    referencia = na_regiao or [
+        im for im in CATALOGO_BR if _eh_vizinho(regiao_n, str(im.get("regiao") or "").lower())
+    ]
+    cidades = {im.get("cidade") for im in referencia}
+
+    outras: list[dict[str, str]] = []
+    if preco_max is not None:
+        for im in sorted(disponiveis, key=lambda i: float(i["preco"])):
+            chave = str(im.get("regiao") or "").lower()
+            if (
+                float(im["preco"]) > preco_max
+                or (regiao_n and _regiao_bate(im, regiao_n))
+                or (cidades and im.get("cidade") not in cidades)
+                or any(o["regiao"] == chave for o in outras)
+            ):
+                continue
+            outras.append({"regiao": chave, "nome": str(im.get("bairro") or chave.title())})
+    return {"menor_preco_regiao": menor_preco, "outras_regioes": outras[:2]}
 
 
 def buscar_br(
@@ -686,4 +737,9 @@ def buscar_br_resultado(
             "match": "aproximado",
             "motivo": motivo_e,
         }
-    return {"imoveis": [], "match": "vazio", "motivo": ""}
+    return {
+        "imoveis": [],
+        "match": "vazio",
+        "motivo": "",
+        "pistas": _pistas_sem_resultado(intencao=intencao, regiao=regiao, preco_max=preco_max),
+    }

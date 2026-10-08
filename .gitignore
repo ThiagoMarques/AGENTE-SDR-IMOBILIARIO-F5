@@ -9,6 +9,8 @@ dados/
 faiss_index/
 *.log
 .pytest_cache/
+treinador/saidas/
+treinador/contextos.json
 frontend/node_modules/
 frontend/dist/
 *.tsbuildinfo

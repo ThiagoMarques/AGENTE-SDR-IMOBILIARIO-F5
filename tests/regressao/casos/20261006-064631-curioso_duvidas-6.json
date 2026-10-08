@@ -1,0 +1,92 @@
+{
+  "persona": "curioso_duvidas",
+  "criado_em": "2026-10-06T06:46:31",
+  "mensagens_lead": [
+    "Oi, tudo bem? Tô querendo comprar um apê em Moema, até 1,5 milhão, de 2 quartos. Tem alguma coisa nesse preço?",
+    "Ah, to sem pressa, mas gostaria de ver opções logo. E como funciona o ITBI? É uma taxa alta?",
+    "Ah tá, então é uma grana a mais pra incluir no planejamento né? E sobre o FGTS, dá pra usar na compra do apê?",
+    "Show! Vou ficar de olho nisso então. E quanto que costuma ser o valor do condomínio em Moema? É caro?",
+    "Beleza! Espero as opções então. Vlw!",
+    "Opa, esse de 3 quartos tá fora do que eu busco... queria 2 quartos. Tem mais opções? E se sim, posso ver no mesmo dia?",
+    "Ah, entendi. E quanto tempo leva pra ele me responder? Tô ansioso pra ver mais opções!",
+    "Poxa, será que dá pra agilizar? Quero muito ver opções logo! 😅"
+  ],
+  "falhas_detectadas": [
+    {
+      "tipo": "repetiu_resposta",
+      "turno": 7,
+      "descricao": "O agente mandou exatamente a mesma resposta duas vezes seguidas."
+    },
+    {
+      "tipo": "repetiu_resposta",
+      "turno": 8,
+      "descricao": "O agente mandou exatamente a mesma resposta duas vezes seguidas."
+    }
+  ],
+  "conversa_original": [
+    {
+      "papel": "lead",
+      "texto": "Oi, tudo bem? Tô querendo comprar um apê em Moema, até 1,5 milhão, de 2 quartos. Tem alguma coisa nesse preço?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Boa pergunta! Essa eu prefiro confirmar com o corretor, pra não te passar nada errado.\n\nE me conta: você está com prazo mais curto, médio ou sem pressa por enquanto?"
+    },
+    {
+      "papel": "lead",
+      "texto": "Ah, to sem pressa, mas gostaria de ver opções logo. E como funciona o ITBI? É uma taxa alta?"
+    },
+    {
+      "papel": "agente",
+      "texto": "O ITBI é o imposto municipal pago na compra do imóvel. Fica em torno de 2% a 3% do valor, conforme a cidade, e é pago antes da escritura."
+    },
+    {
+      "papel": "lead",
+      "texto": "Ah tá, então é uma grana a mais pra incluir no planejamento né? E sobre o FGTS, dá pra usar na compra do apê?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Dá pra usar o FGTS na entrada ou para amortizar o financiamento, desde que seja o seu primeiro imóvel residencial na cidade e ele se enquadre nas regras do programa."
+    },
+    {
+      "papel": "lead",
+      "texto": "Show! Vou ficar de olho nisso então. E quanto que costuma ser o valor do condomínio em Moema? É caro?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Condomínio e IPTU variam bastante de um imóvel pro outro. Assim que eu te mostrar as opções, te passo os valores de cada uma."
+    },
+    {
+      "papel": "lead",
+      "texto": "Beleza! Espero as opções então. Vlw!"
+    },
+    {
+      "papel": "agente",
+      "texto": "Encontrei estas opções para o seu perfil:\n\nBR-SP-002 — Av. Ibirapuera, 2900 — Moema (compra)\n  São Paulo/SP | 3 quartos | 110 m² | BRL 1.450.000\n\nSe quiser, já marco uma visita a alguma delas com um corretor.\nTenho estes horários:\n• 07/10/2026 10:00\n• 07/10/2026 14:00\n• 07/10/2026 16:00\nQual funciona melhor para você? Se preferir outro dia/horário, me fala.\nSe quiser, já me passa seu e-mail que eu te mando o convite da visita (uso só para isso e para o contato do corretor)."
+    },
+    {
+      "papel": "lead",
+      "texto": "Opa, esse de 3 quartos tá fora do que eu busco... queria 2 quartos. Tem mais opções? E se sim, posso ver no mesmo dia?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Boa pergunta! Essa eu prefiro confirmar com o corretor, pra não te passar nada errado."
+    },
+    {
+      "papel": "lead",
+      "texto": "Ah, entendi. E quanto tempo leva pra ele me responder? Tô ansioso pra ver mais opções!"
+    },
+    {
+      "papel": "agente",
+      "texto": "Boa pergunta! Essa eu prefiro confirmar com o corretor, pra não te passar nada errado."
+    },
+    {
+      "papel": "lead",
+      "texto": "Poxa, será que dá pra agilizar? Quero muito ver opções logo! 😅"
+    },
+    {
+      "papel": "agente",
+      "texto": "Boa pergunta! Essa eu prefiro confirmar com o corretor, pra não te passar nada errado."
+    }
+  ]
+}

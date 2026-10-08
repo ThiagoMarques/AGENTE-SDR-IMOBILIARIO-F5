@@ -9,7 +9,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(text || res.statusText);
+    let detalhe = text;
+    try {
+      const corpo = JSON.parse(text);
+      if (typeof corpo?.detail === "string") detalhe = corpo.detail;
+    } catch {
+      /* corpo não é JSON */
+    }
+    throw new Error(detalhe || res.statusText);
   }
   return res.json() as Promise<T>;
 }
@@ -112,6 +119,79 @@ export type ChatResponse = {
   usou_llm: boolean;
 };
 
+/** Treinador externo — api/treinador.py e treinador/execucao.py */
+export type Persona = { id: string; descricao: string; objetivo: string; roteiro: string[] };
+
+export type ContextoTreino = { id: string; nome: string; contexto: string; criado_em: string };
+
+export type TreinadorConfig = {
+  llm_disponivel: boolean;
+  modelo: string;
+  personas: Persona[];
+  contextos: ContextoTreino[];
+};
+
+export type FalhaAutomatica = { tipo: string; turno: number; descricao: string };
+export type FalhaJuiz = FalhaAutomatica & { sugestao: string };
+
+export type ExecucaoTreino = {
+  persona: string;
+  persona_nome?: string;
+  persona_descricao?: string;
+  lead_id: string;
+  modo_lead: "llm" | "roteiro";
+  conversa: Mensagem[];
+  fim: string;
+  erro: string | null;
+  avaliacao: {
+    deterministicas: FalhaAutomatica[];
+    juiz: { notas: Record<string, number>; falhas: FalhaJuiz[]; resumo: string };
+    media: number | null;
+    aprovada: boolean;
+  };
+};
+
+export type Rodada = {
+  id: string;
+  estado: "iniciando" | "rodando" | "concluida" | "erro" | "interrompida";
+  inicio?: string;
+  fim?: string | null;
+  parametros?: {
+    personas: string[];
+    rodadas: number;
+    max_turnos: number;
+    lead: string;
+    juiz: boolean;
+    modelo: string;
+    gerar_regressao: boolean;
+  };
+  total?: number;
+  concluidas?: number;
+  atual?: { persona: string; persona_nome?: string; rodada: number } | null;
+  resumo?: { aprovadas: number; media: number | null; falhas_automaticas: number; falhas_juiz: number };
+  casos?: string[];
+  erro?: string | null;
+  execucoes?: ExecucaoTreino[];
+  log?: string;
+};
+
+export type CasoRegressao = {
+  arquivo: string;
+  persona: string;
+  persona_nome?: string;
+  criado_em: string;
+  mensagens_lead: string[];
+  falhas_detectadas: FalhaAutomatica[];
+};
+
+export type NovaRodada = {
+  personas: string[];
+  rodadas: number;
+  max_turnos: number;
+  usar_llm: boolean;
+  gerar_regressao: boolean;
+};
+
 export const api = {
   chat: (lead_id: string, mensagem: string) =>
     request<ChatResponse>("/chat", {
@@ -127,4 +207,17 @@ export const api = {
       { method: "POST" },
     ),
   health: () => request<Record<string, unknown>>("/health"),
+  treinador: {
+    config: () => request<TreinadorConfig>("/treinador/config"),
+    rodadas: () => request<Rodada[]>("/treinador/rodadas"),
+    rodada: (id: string) => request<Rodada>(`/treinador/rodadas/${encodeURIComponent(id)}`),
+    iniciar: (body: NovaRodada) =>
+      request<{ id: string }>("/treinador/rodadas", { method: "POST", body: JSON.stringify(body) }),
+    casos: () => request<CasoRegressao[]>("/treinador/casos"),
+    criarContexto: (contexto: string, nome = "") =>
+      request<ContextoTreino>("/treinador/contextos", { method: "POST", body: JSON.stringify({ contexto, nome }) }),
+    removerContexto: (id: string) =>
+      request<{ removido: boolean }>(`/treinador/contextos/${encodeURIComponent(id)}`, { method: "DELETE" }),
+    relatorioUrl: (id: string) => apiUrl(`/treinador/rodadas/${encodeURIComponent(id)}/relatorio`),
+  },
 };

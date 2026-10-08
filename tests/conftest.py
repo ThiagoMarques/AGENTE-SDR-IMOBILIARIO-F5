@@ -44,9 +44,12 @@ def memoria_em_ram(monkeypatch):
         return {"lead_id": lead_id, "criado_em": datetime.now(timezone.utc).isoformat(),
                 "perfil": {}, "mensagens": [], "agendamentos": [], "imoveis_sugeridos": []}
 
+    # Mesmas chaves que src/db/repos.py grava: o que ficar fora daqui some entre mensagens.
+    persistidas = {"lead_id", "criado_em", "perfil", "controle_sdr", "mensagens",
+                   "agendamentos", "imoveis_sugeridos"}
+
     def salvar(estado):
-        estado = copy.deepcopy(estado)
-        estado.pop("crm", None)  # o banco real não persiste estado['crm']
+        estado = {k: copy.deepcopy(v) for k, v in estado.items() if k in persistidas}
         banco[str(estado["lead_id"])] = estado
         return str(estado["lead_id"])
 

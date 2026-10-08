@@ -1,0 +1,140 @@
+{
+  "persona": "muda_de_ideia",
+  "persona_nome": "muda de ideia",
+  "persona_descricao": "Comprador indeciso que muda região e valor no meio da conversa.",
+  "criado_em": "2026-10-06T07:04:58",
+  "mensagens_lead": [
+    "Oi, tudo bem? Tô pensando em comprar um apê na Zona Sul, tenho até 800 mil pra gastar. Tem algo legal por aí?",
+    "Oi! Pode me chamar de Lucas. Tava pensando em um de 2 quartos, mas pode ser 1 se for bom. Tem alguma coisa interessante?",
+    "Tô sem pressa, mas queria ver as opções logo. Mas, pensando bem, tô começando a achar que a Zona Leste pode ser uma boa também... tem algo aí?",
+    "Pô, legal as opções! Mas pensando melhor, acho que seria bom aumentar o valor pra até 1 milhão e ver mais opções, sabe? Tem algo na Zona Leste nesse valor? E posso ver os horários depois, tranquilo.",
+    "Beleza! Mas antes de marcar, tem alguma opção na Zona Leste até 1 milhão? Quero ver o que rola por lá.",
+    "Oi, entendi! Mas antes de marcar, pode me mostrar algumas opções na Zona Leste até 1 milhão? Tô curioso pra ver o que tem por lá!",
+    "Pô, mas e as opções na Zona Leste? Quero ver isso primeiro antes de marcar. Tem alguma coisa legal lá até 1 milhão?",
+    "Calma aí, mas não era pra ver opções na Zona Leste? Não quero marcar visita sem ver o que tem por lá primeiro!",
+    "Pô, não entendi! Antes de marcar eu queria ver as opções na Zona Leste até 1 milhão! Tem alguma coisa lá?",
+    "Pô, eu só quero ver as opções na Zona Leste antes de marcar! Tem algum apê até 1 milhão lá?",
+    "Pô, não tá legal isso! Não quero visitar nada na Zona Norte, só na Leste. Me mostra os apês na Leste antes de marcar. Se não tiver, beleza, mas quero ver!",
+    "Pô, não tá rolando isso! Não quero visitar na Zona Norte, só na Leste. Me manda as opções lá primeiro, depois a gente vê a visita. Se não tiver, tudo bem, mas preciso saber!"
+  ],
+  "falhas_detectadas": [
+    {
+      "tipo": "repetiu_resposta",
+      "turno": 9,
+      "descricao": "O agente mandou exatamente a mesma resposta duas vezes seguidas."
+    },
+    {
+      "tipo": "repetiu_resposta",
+      "turno": 10,
+      "descricao": "O agente mandou exatamente a mesma resposta duas vezes seguidas."
+    },
+    {
+      "tipo": "repetiu_resposta",
+      "turno": 11,
+      "descricao": "O agente mandou exatamente a mesma resposta duas vezes seguidas."
+    },
+    {
+      "tipo": "repetiu_resposta",
+      "turno": 12,
+      "descricao": "O agente mandou exatamente a mesma resposta duas vezes seguidas."
+    }
+  ],
+  "conversa_original": [
+    {
+      "papel": "lead",
+      "texto": "Oi, tudo bem? Tô pensando em comprar um apê na Zona Sul, tenho até 800 mil pra gastar. Tem algo legal por aí?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Perfeito, anotei: buscar para comprar, região Zona Sul, até R$ 800 mil e apartamento.\n\nQuantos quartos você procura?\n\nAh, e como posso te chamar?"
+    },
+    {
+      "papel": "lead",
+      "texto": "Oi! Pode me chamar de Lucas. Tava pensando em um de 2 quartos, mas pode ser 1 se for bom. Tem alguma coisa interessante?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Pronto, atualizei: 2 quartos e foco em Lucas Tava Pensando.\n\nVocê está com prazo mais curto, médio ou sem pressa por enquanto?"
+    },
+    {
+      "papel": "lead",
+      "texto": "Tô sem pressa, mas queria ver as opções logo. Mas, pensando bem, tô começando a achar que a Zona Leste pode ser uma boa também... tem algo aí?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Feito, atualizei: região Zona Leste e sem pressa.\n\nNão achei exatamente o que você pediu, mas tenho opções bem próximas. A primeira fica perto da Zona Leste (Santana) e encaixa com folga no orçamento.\n\nBR-SP-010 — Av. Braz Leme, 1500 — Zona Norte (compra, investimento)\n  São Paulo/SP | 2 quartos | 70 m² | BRL 540.000\n\nBR-SP-009 — Rua Heitor Penteado, 600 — Zona Oeste (compra, aluguel)\n  São Paulo/SP | 2 quartos | 65 m² | BRL 620.000\n\nBR-SP-004 — Rua Vergueiro, 2100 — Zona Sul (compra, investimento)\n  São Paulo/SP | 2 quartos | 72 m² | BRL 690.000\n\nSe quiser, já marco uma visita a alguma delas com um corretor.\nTenho estes horários:\n• 07/10/2026 10:00\n• 07/10/2026 14:00\n• 07/10/2026 16:00\nQual funciona melhor para você? Se preferir outro dia/horário, me fala.\nSe quiser, já me passa seu e-mail que eu te mando o convite da visita (uso só para isso e para o contato do corretor)."
+    },
+    {
+      "papel": "lead",
+      "texto": "Pô, legal as opções! Mas pensando melhor, acho que seria bom aumentar o valor pra até 1 milhão e ver mais opções, sabe? Tem algo na Zona Leste nesse valor? E posso ver os horários depois, tranquilo."
+    },
+    {
+      "papel": "agente",
+      "texto": "Já tenho o essencial da sua busca. Podemos combinar uma visita ou conversa com um corretor.\nTenho estes horários:\n• 07/10/2026 10:00\n• 07/10/2026 14:00\n• 07/10/2026 16:00\nQual funciona melhor para você? Se preferir outro dia/horário, me fala.\nSe quiser, já me passa seu e-mail que eu te mando o convite da visita (uso só para isso e para o contato do corretor)."
+    },
+    {
+      "papel": "lead",
+      "texto": "Beleza! Mas antes de marcar, tem alguma opção na Zona Leste até 1 milhão? Quero ver o que rola por lá."
+    },
+    {
+      "papel": "agente",
+      "texto": "Ótimo! Qual desses fica melhor?\n• 07/10/2026 10:00\n• 07/10/2026 14:00\n• 07/10/2026 16:00\nÉ só me dizer qual."
+    },
+    {
+      "papel": "lead",
+      "texto": "Oi, entendi! Mas antes de marcar, pode me mostrar algumas opções na Zona Leste até 1 milhão? Tô curioso pra ver o que tem por lá!"
+    },
+    {
+      "papel": "agente",
+      "texto": "Já tenho o essencial da sua busca. Podemos combinar uma visita ou conversa com um corretor.\nTenho estes horários:\n• 07/10/2026 10:00\n• 07/10/2026 14:00\n• 07/10/2026 16:00\nQual funciona melhor para você? Se preferir outro dia/horário, me fala.\nSe quiser, já me passa seu e-mail que eu te mando o convite da visita (uso só para isso e para o contato do corretor)."
+    },
+    {
+      "papel": "lead",
+      "texto": "Pô, mas e as opções na Zona Leste? Quero ver isso primeiro antes de marcar. Tem alguma coisa legal lá até 1 milhão?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Fechado, Lucas! Visita marcada para quarta, 07/10 às 10h.\n\nImóvel: Apartamento 2 dorms — Zona Norte — Av. Braz Leme, 1500 — Zona Norte.\n\nDeixei aqui embaixo os atalhos para salvar na sua agenda (Google, Outlook ou .ics). Se quiser receber o convite por e-mail, me passa seu e-mail.\n\nSe precisar mudar, é só me avisar."
+    },
+    {
+      "papel": "lead",
+      "texto": "Calma aí, mas não era pra ver opções na Zona Leste? Não quero marcar visita sem ver o que tem por lá primeiro!"
+    },
+    {
+      "papel": "agente",
+      "texto": "Sua visita já está marcada para quarta, 07/10 às 10h. Se quiser mudar, me diga o novo dia e horário."
+    },
+    {
+      "papel": "lead",
+      "texto": "Pô, não entendi! Antes de marcar eu queria ver as opções na Zona Leste até 1 milhão! Tem alguma coisa lá?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Sua visita já está marcada para quarta, 07/10 às 10h. Se quiser mudar, me diga o novo dia e horário."
+    },
+    {
+      "papel": "lead",
+      "texto": "Pô, eu só quero ver as opções na Zona Leste antes de marcar! Tem algum apê até 1 milhão lá?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Sua visita já está marcada para quarta, 07/10 às 10h. Se quiser mudar, me diga o novo dia e horário."
+    },
+    {
+      "papel": "lead",
+      "texto": "Pô, não tá legal isso! Não quero visitar nada na Zona Norte, só na Leste. Me mostra os apês na Leste antes de marcar. Se não tiver, beleza, mas quero ver!"
+    },
+    {
+      "papel": "agente",
+      "texto": "Sua visita já está marcada para quarta, 07/10 às 10h. Se quiser mudar, me diga o novo dia e horário."
+    },
+    {
+      "papel": "lead",
+      "texto": "Pô, não tá rolando isso! Não quero visitar na Zona Norte, só na Leste. Me manda as opções lá primeiro, depois a gente vê a visita. Se não tiver, tudo bem, mas preciso saber!"
+    },
+    {
+      "papel": "agente",
+      "texto": "Sua visita já está marcada para quarta, 07/10 às 10h. Se quiser mudar, me diga o novo dia e horário."
+    }
+  ]
+}

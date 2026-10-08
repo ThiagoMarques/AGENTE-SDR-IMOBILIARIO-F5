@@ -38,6 +38,13 @@ _RECUSA = (
 _CANCELAR = ("cancelar", "cancela", "desmarcar", "desmarca", "nao vou poder ir", "nao vou mais")
 _REMARCAR = ("remarcar", "remarca", "reagendar", "mudar o horario", "trocar o horario", "mudar a visita", "mudar a data", "trocar a data")
 _STATUS_ATIVOS = ("agendado",)
+# "antes de marcar, quero ver as opções", "os horários eu vejo depois": a visita fica para depois.
+ADIA_AGENDA = re.compile(
+    r"\bantes de (?:marcar|agendar|visitar|ver os horarios)\b"
+    r"|\bnao quero (?:marcar|agendar|visitar|ver horario)"
+    r"|\b(?:horarios?|visita|agendamento)\s+(?:eu\s+\w+\s+)?depois\b"
+    r"|\b(?:marcar|agendar|ver os horarios)\s+depois\b"
+)
 
 
 def _norm(texto: str) -> str:
@@ -239,8 +246,13 @@ def _periodo(t: str) -> str | None:
 def _ordinal(t: str, ofertados: list[str]) -> str | None:
     if not ofertados or any(p in t for p in _PALAVRAS_IMOVEL):
         return None
+    curta = len(t.split()) <= 4
     for chave in sorted(_ORDINAIS, key=len, reverse=True):
-        if re.search(rf"\b{re.escape(chave)}\b", t):
+        # "quero ver isso primeiro" não é "o primeiro horário": fora de resposta curta, exige artigo ou substantivo.
+        padrao = rf"\b{re.escape(chave)}\b" if curta or chave.startswith("opcao") else (
+            rf"(?:\b(?:o|a|no|na|pelo|pela)\s+{re.escape(chave)}\b|\b{re.escape(chave)}\s+(?:horario|opcao|data))"
+        )
+        if re.search(padrao, t):
             idx = _ORDINAIS[chave]
             if -len(ofertados) <= idx < len(ofertados):
                 return ofertados[idx]
@@ -270,6 +282,8 @@ def interpretar_escolha(
     ref = referencia or agora()
     tz = cal.fuso()
     t = _norm(texto)
+    if ADIA_AGENDA.search(t):
+        return None
     ofertas = [o for o in (ofertados or []) if parse_horario(o)]
     datas = _datas(t, ref)
     horas = _horas(t, com_ofertas=bool(ofertas))

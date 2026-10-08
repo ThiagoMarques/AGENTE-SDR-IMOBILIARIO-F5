@@ -1,0 +1,60 @@
+{
+  "persona": "investidor_prazo",
+  "criado_em": "2026-10-06T06:46:31",
+  "mensagens_lead": [
+    "Oi, tô querendo investir uns 500 mil em imóveis, vi que tem bastante valorização. Como funciona isso?",
+    "Em 3 anos, espero ver uma valorização boa, sabe? Mas não sei se é isso que vc quer perguntar...",
+    "Entendi, mas meu foco é mais na valorização mesmo. Quais áreas vc recomenda pra isso?",
+    "Ah, tá. Queria saber de áreas que estão bombando, tipo, onde o preço tá subindo mais rápido.",
+    "Essas opções parecem boas! Vou querer visitar sim. O horário das 14:00 funciona pra mim. Me manda por e-mail o convite, é meuemail@gmail.com"
+  ],
+  "falhas_detectadas": [
+    {
+      "tipo": "repetiu_resposta",
+      "turno": 3,
+      "descricao": "O agente mandou exatamente a mesma resposta duas vezes seguidas."
+    }
+  ],
+  "conversa_original": [
+    {
+      "papel": "lead",
+      "texto": "Oi, tô querendo investir uns 500 mil em imóveis, vi que tem bastante valorização. Como funciona isso?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Para aluguel residencial, a rentabilidade costuma ficar entre 4% e 6% ao ano sobre o valor do imóvel, sem contar a valorização. Varia bastante por bairro.\n\nE me conta: qual expectativa de retorno você tem para esse investimento?"
+    },
+    {
+      "papel": "lead",
+      "texto": "Em 3 anos, espero ver uma valorização boa, sabe? Mas não sei se é isso que vc quer perguntar..."
+    },
+    {
+      "papel": "agente",
+      "texto": "Para aluguel residencial, a rentabilidade costuma ficar entre 4% e 6% ao ano sobre o valor do imóvel, sem contar a valorização. Varia bastante por bairro."
+    },
+    {
+      "papel": "lead",
+      "texto": "Entendi, mas meu foco é mais na valorização mesmo. Quais áreas vc recomenda pra isso?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Para aluguel residencial, a rentabilidade costuma ficar entre 4% e 6% ao ano sobre o valor do imóvel, sem contar a valorização. Varia bastante por bairro."
+    },
+    {
+      "papel": "lead",
+      "texto": "Ah, tá. Queria saber de áreas que estão bombando, tipo, onde o preço tá subindo mais rápido."
+    },
+    {
+      "papel": "agente",
+      "texto": "Perfeito, anotei: prazo curto.\n\nEncontrei estas opções para o seu perfil:\n\nBR-SP-003 — Rua dos Pinheiros, 850 — Pinheiros (aluguel, investimento)\n  São Paulo/SP | 1 quarto | 32 m² | BRL 4.200\n\nBR-SP-008 — Av. São João, 300 — Centro (aluguel, investimento)\n  São Paulo/SP | 1 quarto | 28 m² | BRL 2.100\n\nSe quiser, já marco uma visita a alguma delas com um corretor.\nTenho estes horários:\n• 07/10/2026 10:00\n• 07/10/2026 14:00\n• 07/10/2026 16:00\nQual funciona melhor para você? Se preferir outro dia/horário, me fala.\nSe quiser, já me passa seu e-mail que eu te mando o convite da visita (uso só para isso e para o contato do corretor)."
+    },
+    {
+      "papel": "lead",
+      "texto": "Essas opções parecem boas! Vou querer visitar sim. O horário das 14:00 funciona pra mim. Me manda por e-mail o convite, é meuemail@gmail.com"
+    },
+    {
+      "papel": "agente",
+      "texto": "Fechado! Visita marcada para quarta, 07/10 às 14h.\n\nImóvel: Studio — Pinheiros — Rua dos Pinheiros, 850 — Pinheiros.\n\nAnotei seu e-mail (meuemail@gmail.com). Deixei aqui embaixo os atalhos para salvar na agenda.\n\nSe precisar mudar, é só me avisar."
+    }
+  ]
+}

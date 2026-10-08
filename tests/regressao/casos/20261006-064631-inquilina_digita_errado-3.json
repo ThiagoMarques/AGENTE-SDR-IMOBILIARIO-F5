@@ -1,0 +1,78 @@
+{
+  "persona": "inquilina_digita_errado",
+  "criado_em": "2026-10-06T06:46:31",
+  "mensagens_lead": [
+    "Oi, tudo bem? Tô procurando um apê de 1 quarto na Zona Sul, até R$ 2.500. Vcs tem algo assim?",
+    "Oi! Tô sem pressa, mas qnto antes melhor. Tem alguma coisa legal pra me mostrar?",
+    "Putz, 690 mil é bem caro! Nao quero aumentar o valor, mas pode olhar em outra regiao sim. Obrigado!",
+    "Santana e Sumarezinho? Pode olhar sim! Queria ver o que tem por lá.",
+    "Prefiro manter o valor e a quantidade de quartos. Se tiver em Santana ou Sumarezinho, melhor!",
+    "Ué, mas vc acabou de falar que nao tem nada em Santana e Sumarezinho. Ta confuso isso! Tem certeza que tá certo?",
+    "Aff, ta difícil hein! Se não tiver 1 quarto, tem alguma opçao com 2 quartos que caiba no meu orçamento?"
+  ],
+  "falhas_detectadas": [
+    {
+      "tipo": "repetiu_resposta",
+      "turno": 7,
+      "descricao": "O agente mandou exatamente a mesma resposta duas vezes seguidas."
+    }
+  ],
+  "conversa_original": [
+    {
+      "papel": "lead",
+      "texto": "Oi, tudo bem? Tô procurando um apê de 1 quarto na Zona Sul, até R$ 2.500. Vcs tem algo assim?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Boa pergunta! Essa eu prefiro confirmar com o corretor, pra não te passar nada errado.\n\nE me conta: você está com prazo mais curto, médio ou sem pressa por enquanto?"
+    },
+    {
+      "papel": "lead",
+      "texto": "Oi! Tô sem pressa, mas qnto antes melhor. Tem alguma coisa legal pra me mostrar?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Não encontrei nada com 1 quarto na Zona Sul até R$ 2.500 por enquanto. Por lá, o mais em conta que tenho hoje sai por R$ 690 mil. Dá pra aumentar um pouco o valor, ou prefere que eu olhe outra região?"
+    },
+    {
+      "papel": "lead",
+      "texto": "Putz, 690 mil é bem caro! Nao quero aumentar o valor, mas pode olhar em outra regiao sim. Obrigado!"
+    },
+    {
+      "papel": "agente",
+      "texto": "Não encontrei nada com 1 quarto em Outra Regiao até R$ 690 mil por enquanto. Dentro do seu valor, tenho opções em Santana e em Sumarezinho. Quer que eu procure por lá?"
+    },
+    {
+      "papel": "lead",
+      "texto": "Santana e Sumarezinho? Pode olhar sim! Queria ver o que tem por lá."
+    },
+    {
+      "papel": "agente",
+      "texto": "Pra eu achar algo pra você, me diz o que prefere mudar: o valor, a região ou a quantidade de quartos."
+    },
+    {
+      "papel": "lead",
+      "texto": "Prefiro manter o valor e a quantidade de quartos. Se tiver em Santana ou Sumarezinho, melhor!"
+    },
+    {
+      "papel": "agente",
+      "texto": "Não encontrei nada com 1 quarto em Santana, Sumarezinho até R$ 690 mil por enquanto. Dentro do seu valor, tenho opções em Santana e em Sumarezinho. Quer que eu procure por lá?"
+    },
+    {
+      "papel": "lead",
+      "texto": "Ué, mas vc acabou de falar que nao tem nada em Santana e Sumarezinho. Ta confuso isso! Tem certeza que tá certo?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Boa pergunta! Essa eu prefiro confirmar com o corretor, pra não te passar nada errado."
+    },
+    {
+      "papel": "lead",
+      "texto": "Aff, ta difícil hein! Se não tiver 1 quarto, tem alguma opçao com 2 quartos que caiba no meu orçamento?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Boa pergunta! Essa eu prefiro confirmar com o corretor, pra não te passar nada errado."
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+{
+  "persona": "muda_de_ideia",
+  "criado_em": "2026-10-06T06:46:31",
+  "mensagens_lead": [
+    "Oi! Tô pensando em comprar um apê na Zona Sul, até 800 mil. Tem alguma coisa legal?",
+    "Ah, to pensando em um de 2 quartos. Mas e se eu mudar pra Zona Leste?",
+    "Ah, sem pressa por enquanto. Mas na Zona Leste, tem alguma coisa legal com 2 quartos?",
+    "Certo, mas acho que eu poderia aumentar o orçamento pra 1 milhão. Tem mais opções assim?",
+    "Acho que prefiro ver as opções na Zona Leste mesmo. Tem alguma coisa nesse valor por lá?",
+    "Mas e na Zona Leste, tem alguma coisa até 1 milhão? Vcs não acharam nada?",
+    "Putz, mas eu queria algo na Zona Leste, será que não tem nada? Tô disposto a pagar até 1 milhão.",
+    "Sei lá, acho que vou dar uma olhada em outras regiões. Valeu!"
+  ],
+  "falhas_detectadas": [
+    {
+      "tipo": "repetiu_resposta",
+      "turno": 7,
+      "descricao": "O agente mandou exatamente a mesma resposta duas vezes seguidas."
+    },
+    {
+      "tipo": "repetiu_resposta",
+      "turno": 8,
+      "descricao": "O agente mandou exatamente a mesma resposta duas vezes seguidas."
+    }
+  ],
+  "conversa_original": [
+    {
+      "papel": "lead",
+      "texto": "Oi! Tô pensando em comprar um apê na Zona Sul, até 800 mil. Tem alguma coisa legal?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Boa pergunta! Essa eu prefiro confirmar com o corretor, pra não te passar nada errado.\n\nE me conta: quantos quartos você procura?"
+    },
+    {
+      "papel": "lead",
+      "texto": "Ah, to pensando em um de 2 quartos. Mas e se eu mudar pra Zona Leste?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Boa pergunta! Essa eu prefiro confirmar com o corretor, pra não te passar nada errado.\n\nE me conta: você está com prazo mais curto, médio ou sem pressa por enquanto?"
+    },
+    {
+      "papel": "lead",
+      "texto": "Ah, sem pressa por enquanto. Mas na Zona Leste, tem alguma coisa legal com 2 quartos?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Boa pergunta! Essa eu prefiro confirmar com o corretor, pra não te passar nada errado."
+    },
+    {
+      "papel": "lead",
+      "texto": "Certo, mas acho que eu poderia aumentar o orçamento pra 1 milhão. Tem mais opções assim?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Certo, atualizei: até R$ 1 mi.\n\nNão achei exatamente o que você pediu, mas tenho opções bem próximas. A primeira fica perto de zona leste (Santana) e encaixa com folga no orçamento.\n\nBR-SP-010 — Av. Braz Leme, 1500 — Zona Norte (compra, investimento)\n  São Paulo/SP | 2 quartos | 70 m² | BRL 540.000\n\nBR-SP-009 — Rua Heitor Penteado, 600 — Zona Oeste (compra, aluguel)\n  São Paulo/SP | 2 quartos | 65 m² | BRL 620.000\n\nBR-SP-004 — Rua Vergueiro, 2100 — Zona Sul (compra, investimento)\n  São Paulo/SP | 2 quartos | 72 m² | BRL 690.000\n\nSe quiser, já marco uma visita a alguma delas com um corretor.\nTenho estes horários:\n• 07/10/2026 10:00\n• 07/10/2026 14:00\n• 07/10/2026 16:00\nQual funciona melhor para você? Se preferir outro dia/horário, me fala.\nSe quiser, já me passa seu e-mail que eu te mando o convite da visita (uso só para isso e para o contato do corretor)."
+    },
+    {
+      "papel": "lead",
+      "texto": "Acho que prefiro ver as opções na Zona Leste mesmo. Tem alguma coisa nesse valor por lá?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Certo, atualizei: prazo curto.\n\nNão achei exatamente o que você pediu, mas tenho opções bem próximas. A primeira fica perto de zona leste (Santana) e encaixa com folga no orçamento.\n\nBR-SP-010 — Av. Braz Leme, 1500 — Zona Norte (compra, investimento)\n  São Paulo/SP | 2 quartos | 70 m² | BRL 540.000\n\nBR-SP-009 — Rua Heitor Penteado, 600 — Zona Oeste (compra, aluguel)\n  São Paulo/SP | 2 quartos | 65 m² | BRL 620.000\n\nBR-SP-004 — Rua Vergueiro, 2100 — Zona Sul (compra, investimento)\n  São Paulo/SP | 2 quartos | 72 m² | BRL 690.000\n\nSe quiser, já marco uma visita a alguma delas com um corretor.\nTenho estes horários:\n• 07/10/2026 10:00\n• 07/10/2026 14:00\n• 07/10/2026 16:00\nQual funciona melhor para você? Se preferir outro dia/horário, me fala.\nSe quiser, já me passa seu e-mail que eu te mando o convite da visita (uso só para isso e para o contato do corretor)."
+    },
+    {
+      "papel": "lead",
+      "texto": "Mas e na Zona Leste, tem alguma coisa até 1 milhão? Vcs não acharam nada?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Não achei exatamente o que você pediu, mas tenho opções bem próximas. A primeira fica perto de zona leste (Santana) e encaixa com folga no orçamento.\n\nBR-SP-010 — Av. Braz Leme, 1500 — Zona Norte (compra, investimento)\n  São Paulo/SP | 2 quartos | 70 m² | BRL 540.000\n\nBR-SP-009 — Rua Heitor Penteado, 600 — Zona Oeste (compra, aluguel)\n  São Paulo/SP | 2 quartos | 65 m² | BRL 620.000\n\nBR-SP-004 — Rua Vergueiro, 2100 — Zona Sul (compra, investimento)\n  São Paulo/SP | 2 quartos | 72 m² | BRL 690.000\n\nSe quiser, já marco uma visita a alguma delas com um corretor.\nTenho estes horários:\n• 07/10/2026 10:00\n• 07/10/2026 14:00\n• 07/10/2026 16:00\nQual funciona melhor para você? Se preferir outro dia/horário, me fala.\nSe quiser, já me passa seu e-mail que eu te mando o convite da visita (uso só para isso e para o contato do corretor)."
+    },
+    {
+      "papel": "lead",
+      "texto": "Putz, mas eu queria algo na Zona Leste, será que não tem nada? Tô disposto a pagar até 1 milhão."
+    },
+    {
+      "papel": "agente",
+      "texto": "Não achei exatamente o que você pediu, mas tenho opções bem próximas. A primeira fica perto de zona leste (Santana) e encaixa com folga no orçamento.\n\nBR-SP-010 — Av. Braz Leme, 1500 — Zona Norte (compra, investimento)\n  São Paulo/SP | 2 quartos | 70 m² | BRL 540.000\n\nBR-SP-009 — Rua Heitor Penteado, 600 — Zona Oeste (compra, aluguel)\n  São Paulo/SP | 2 quartos | 65 m² | BRL 620.000\n\nBR-SP-004 — Rua Vergueiro, 2100 — Zona Sul (compra, investimento)\n  São Paulo/SP | 2 quartos | 72 m² | BRL 690.000\n\nSe quiser, já marco uma visita a alguma delas com um corretor.\nTenho estes horários:\n• 07/10/2026 10:00\n• 07/10/2026 14:00\n• 07/10/2026 16:00\nQual funciona melhor para você? Se preferir outro dia/horário, me fala.\nSe quiser, já me passa seu e-mail que eu te mando o convite da visita (uso só para isso e para o contato do corretor)."
+    },
+    {
+      "papel": "lead",
+      "texto": "Sei lá, acho que vou dar uma olhada em outras regiões. Valeu!"
+    },
+    {
+      "papel": "agente",
+      "texto": "Não achei exatamente o que você pediu, mas tenho opções bem próximas. A primeira fica perto de zona leste (Santana) e encaixa com folga no orçamento.\n\nBR-SP-010 — Av. Braz Leme, 1500 — Zona Norte (compra, investimento)\n  São Paulo/SP | 2 quartos | 70 m² | BRL 540.000\n\nBR-SP-009 — Rua Heitor Penteado, 600 — Zona Oeste (compra, aluguel)\n  São Paulo/SP | 2 quartos | 65 m² | BRL 620.000\n\nBR-SP-004 — Rua Vergueiro, 2100 — Zona Sul (compra, investimento)\n  São Paulo/SP | 2 quartos | 72 m² | BRL 690.000\n\nSe quiser, já marco uma visita a alguma delas com um corretor.\nTenho estes horários:\n• 07/10/2026 10:00\n• 07/10/2026 14:00\n• 07/10/2026 16:00\nQual funciona melhor para você? Se preferir outro dia/horário, me fala.\nSe quiser, já me passa seu e-mail que eu te mando o convite da visita (uso só para isso e para o contato do corretor)."
+    }
+  ]
+}

@@ -1,0 +1,119 @@
+{
+  "persona": "fora_de_escopo",
+  "criado_em": "2026-10-06T06:46:31",
+  "mensagens_lead": [
+    "Oi! Tudo bem? To pensando em alugar um ap na Asa Norte, até uns 3 mil. Vcs têm algo disponível? Ah, e como tá a previsão do tempo pra essa semana?",
+    "Ah, legal! Tô pensando em 2 quartos, mas me diz aí, vai chover essa semana? E o que vc achou do jogo do fim de semana?",
+    "2 quartos tá bom então! E o jogo, cê viu? O time jogou muito! Mas e a previsão de chuva, hein?",
+    "Pô, tá difícil essa previsão! Mas e sobre os apês? Tem algum que eu possa ver?",
+    "Ah, beleza! Manda ver com o corretor então! E quanto aos apês, tem algum que você recomenda? Já vi que a galera tá falando muito do time esse mês, tá demais!",
+    "Ah, beleza! Então, vamo lá! O que mais precisa saber sobre o apê? E, fala sério, quem cê acha que vai ganhar o próximo jogo?",
+    "Puts, sem 2 quartos até 3 mil? Que chato! Então, dá pra ver em outras regiões? E, tipo, o time tá jogando bem, viu? Tirou onda no último jogo!",
+    "Ah, tá certo! Então, vamo ver outras regiões sim! E, a propósito, quem cê acha que vai ser o artilheiro do campeonato?",
+    "Ah, bora ajustar então! Que tal procurar apês em Taguatinga ou Águas Claras? E, sobre o artilheiro, eu tô apostando no nosso! E você?",
+    "República? Pode ser! E, falando nisso, quem cê acha que vai ser o campeão desse ano? 🤔",
+    "Puts, 1 quarto? Que chato! Mas de qualquer forma, marca a visita sim! O horário de 14:00 tá bom pra mim. E, quem cê acha que vai ser o craque do campeonato? 😄"
+  ],
+  "falhas_detectadas": [
+    {
+      "tipo": "repetiu_resposta",
+      "turno": 3,
+      "descricao": "O agente mandou exatamente a mesma resposta duas vezes seguidas."
+    },
+    {
+      "tipo": "repetiu_resposta",
+      "turno": 4,
+      "descricao": "O agente mandou exatamente a mesma resposta duas vezes seguidas."
+    }
+  ],
+  "conversa_original": [
+    {
+      "papel": "lead",
+      "texto": "Oi! Tudo bem? To pensando em alugar um ap na Asa Norte, até uns 3 mil. Vcs têm algo disponível? Ah, e como tá a previsão do tempo pra essa semana?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Boa pergunta! Essa eu prefiro confirmar com o corretor, pra não te passar nada errado.\n\nE me conta: quantos quartos você procura?"
+    },
+    {
+      "papel": "lead",
+      "texto": "Ah, legal! Tô pensando em 2 quartos, mas me diz aí, vai chover essa semana? E o que vc achou do jogo do fim de semana?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Boa pergunta! Essa eu prefiro confirmar com o corretor, pra não te passar nada errado."
+    },
+    {
+      "papel": "lead",
+      "texto": "2 quartos tá bom então! E o jogo, cê viu? O time jogou muito! Mas e a previsão de chuva, hein?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Boa pergunta! Essa eu prefiro confirmar com o corretor, pra não te passar nada errado."
+    },
+    {
+      "papel": "lead",
+      "texto": "Pô, tá difícil essa previsão! Mas e sobre os apês? Tem algum que eu possa ver?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Boa pergunta! Essa eu prefiro confirmar com o corretor, pra não te passar nada errado."
+    },
+    {
+      "papel": "lead",
+      "texto": "Ah, beleza! Manda ver com o corretor então! E quanto aos apês, tem algum que você recomenda? Já vi que a galera tá falando muito do time esse mês, tá demais!"
+    },
+    {
+      "papel": "agente",
+      "texto": "Consigo marcar uma visita com um corretor, sim. Só preciso entender um pouco mais da sua busca antes."
+    },
+    {
+      "papel": "lead",
+      "texto": "Ah, beleza! Então, vamo lá! O que mais precisa saber sobre o apê? E, fala sério, quem cê acha que vai ganhar o próximo jogo?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Não encontrei nada com 2 quartos na Asa Norte até R$ 3 mil por enquanto. Vamos ajustar a região ou o valor?"
+    },
+    {
+      "papel": "lead",
+      "texto": "Puts, sem 2 quartos até 3 mil? Que chato! Então, dá pra ver em outras regiões? E, tipo, o time tá jogando bem, viu? Tirou onda no último jogo!"
+    },
+    {
+      "papel": "agente",
+      "texto": "Boa pergunta! Essa eu prefiro confirmar com o corretor, pra não te passar nada errado."
+    },
+    {
+      "papel": "lead",
+      "texto": "Ah, tá certo! Então, vamo ver outras regiões sim! E, a propósito, quem cê acha que vai ser o artilheiro do campeonato?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Por aqui eu consigo te ajudar com compra, aluguel, investimento e visitas a imóveis. Se quiser, me diga o que você quer ajustar na busca."
+    },
+    {
+      "papel": "lead",
+      "texto": "Ah, bora ajustar então! Que tal procurar apês em Taguatinga ou Águas Claras? E, sobre o artilheiro, eu tô apostando no nosso! E você?"
+    },
+    {
+      "papel": "agente",
+      "texto": "Não encontrei nada com 2 quartos em Taguatinga, Aguas Claras até R$ 3 mil por enquanto. Dentro do seu valor, tenho opções em República. Quer que eu procure por lá?"
+    },
+    {
+      "papel": "lead",
+      "texto": "República? Pode ser! E, falando nisso, quem cê acha que vai ser o campeão desse ano? 🤔"
+    },
+    {
+      "papel": "agente",
+      "texto": "Certo, atualizei: região República.\n\nNão achei exatamente o que você pediu, mas tenho uma opção bem próxima. Ela tem 1 quarto (um a menos do que você pediu) e encaixa com folga no orçamento.\n\nBR-SP-008 — Av. São João, 300 — Centro (aluguel, investimento)\n  São Paulo/SP | 1 quarto | 28 m² | BRL 2.100\n\nSe quiser, já marco uma visita a alguma delas com um corretor.\nTenho estes horários:\n• 07/10/2026 10:00\n• 07/10/2026 14:00\n• 07/10/2026 16:00\nQual funciona melhor para você? Se preferir outro dia/horário, me fala.\nSe quiser, já me passa seu e-mail que eu te mando o convite da visita (uso só para isso e para o contato do corretor)."
+    },
+    {
+      "papel": "lead",
+      "texto": "Puts, 1 quarto? Que chato! Mas de qualquer forma, marca a visita sim! O horário de 14:00 tá bom pra mim. E, quem cê acha que vai ser o craque do campeonato? 😄"
+    },
+    {
+      "papel": "agente",
+      "texto": "Fechado! Visita marcada para quarta, 07/10 às 14h.\n\nImóvel: Kitnet — Centro — Av. São João, 300 — Centro.\n\nDeixei aqui embaixo os atalhos para salvar na sua agenda (Google, Outlook ou .ics). Se quiser receber o convite por e-mail, me passa seu e-mail.\n\nSe precisar mudar, é só me avisar."
+    }
+  ]
+}

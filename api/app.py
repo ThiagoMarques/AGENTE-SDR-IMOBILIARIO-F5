@@ -32,6 +32,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from api.treinador import router as treinador_router  # noqa: E402
+
+app.include_router(treinador_router)
+
 
 class ChatIn(BaseModel):
     lead_id: str = Field(..., min_length=1, max_length=64)

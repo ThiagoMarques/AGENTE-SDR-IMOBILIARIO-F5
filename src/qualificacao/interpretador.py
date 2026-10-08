@@ -42,6 +42,11 @@ REGIOES: dict[str, str] = {
     "república": "república",
 }
 
+# Apelidos aceitos só por escrita exata: no fuzzy, "regiao central" casaria com "regiao entao".
+APELIDOS_REGIAO: dict[str, str] = {
+    "regiao central": "centro",
+}
+
 
 INTENCOES: dict[str, tuple[str, ...]] = {
     "aluguel": (
@@ -93,6 +98,9 @@ CORRECAO_HINTS = (
 
 FORA_ESCOPO = (
     "previsao do tempo",
+    "chover",
+    "chuva",
+    "jogo",
     "clima",
     "temperatura",
     "futebol",
@@ -144,6 +152,16 @@ IMOBILIARIO_HINTS = (
     "regiao",
     "quarto",
     "quartos",
+    "itbi",
+    "escritura",
+    "cartorio",
+    "fgts",
+    "juros",
+    "caucao",
+    "rentabilidade",
+    "rendimento",
+    "retorno",
+    "valoriza",
 )
 
 
@@ -160,6 +178,11 @@ QUESTION_STARTS = (
     "onde ",
     "vocês ",
     "voces ",
+)
+
+
+_OUTRA_REGIAO = re.compile(
+    r"\b(?:outr[ao]s?|qualquer|diferente)\s+(?:regiao|regioes|bairro|bairros|lugar|lugares|area|areas|zona)\b"
 )
 
 
@@ -190,7 +213,11 @@ def parece_correcao(texto: str) -> bool:
     return any(normalizar_texto(x) in t for x in CORRECAO_HINTS)
 
 
-def _detectar_intencao(texto: str) -> str | None:
+# Palavras comuns parecidas com "alugar"/"comprar" que não são erro de digitação.
+_NAO_INTENCAO = {"lugar", "lugares", "comparar", "compare", "comparando", "loucura", "investigar"}
+
+
+def _detectar_intencao(texto: str, *, aproximada: bool = True) -> str | None:
     t = normalizar_texto(texto)
 
     # Match direto primeiro.
@@ -199,9 +226,12 @@ def _detectar_intencao(texto: str) -> str | None:
             if normalizar_texto(alias) in t:
                 return intencao
 
+    if not aproximada:
+        return None
+
     # Depois fuzzy por token. Bom para "alugr", "alugaar", "compraar" etc.
     for token in _tokens(t):
-        if len(token) < 4:
+        if len(token) < 4 or token in _NAO_INTENCAO:
             continue
 
         melhor_intencao = None
@@ -236,7 +266,7 @@ def _detectar_regioes(texto: str) -> list[str]:
 
     # Exato.
     for chave, valor in sorted(
-        normalizadas.items(),
+        {**normalizadas, **APELIDOS_REGIAO}.items(),
         key=lambda item: -len(item[0]),
     ):
         if re.search(rf"\b{re.escape(chave)}\b", t):
@@ -331,6 +361,9 @@ def _extrair_quartos_explicitos(texto: str) -> dict[str, Any]:
     if m:
         return {"quartos": int(m.group(1))}
 
+    if re.search(r"\b(?:kitnet|kitinete|quitinete|studio|estudio|loft|conjugado)\b|\bsem quartos?\b", t):
+        return {"quartos": 0}
+
     return {}
 
 
@@ -350,20 +383,51 @@ def _numero_para_float(txt: str) -> float:
     return float(valor)
 
 
+_UNIDADES = {
+    "um": 1, "uma": 1, "dois": 2, "duas": 2, "tres": 3, "quatro": 4, "cinco": 5,
+    "seis": 6, "sete": 7, "oito": 8, "nove": 9, "dez": 10,
+}
+_CENTENAS = {
+    "cem": 100, "duzentos": 200, "trezentos": 300, "quatrocentos": 400, "quinhentos": 500,
+    "seiscentos": 600, "setecentos": 700, "oitocentos": 800, "novecentos": 900,
+}
+_QTD = r"(\d[\d.,]*|" + "|".join(_UNIDADES) + r")"
+_RESTO_MIL = r"(?:\s+e\s+(\d{3}|" + "|".join(_CENTENAS) + r"))?"
+
+
+def _quantidade(txt: str) -> float:
+    return float(_UNIDADES[txt]) if txt in _UNIDADES else _numero_para_float(txt)
+
+
+def _centena(txt: str | None) -> float:
+    if not txt:
+        return 0.0
+    return float(_CENTENAS.get(txt) or int(txt))
+
+
 def _extrair_preco_explicito(texto: str) -> float | None:
     t = normalizar_texto(texto)
 
-    # 1 milhão / 1,5 milhão / 2 milhões / 1.2 mi
-    m = re.search(r"\br?\$?\s*([\d.,]+)\s*(?:milhao|milhoes|mi)\b", t)
+    # 1 milhão / 1,5 milhão / 2 milhões / 1.2 mi / um milhão e meio / 1 milhão e 200 mil
+    m = re.search(
+        rf"\br?\$?\s*{_QTD}\s*(?:milhao|milhoes|mi)\b(?:\s+e\s+(?:(meio)|(\d{{1,3}})\s*mil\b))?", t
+    )
 
     if m:
-        return _numero_para_float(m.group(1)) * 1_000_000
+        extra = 500_000 if m.group(2) else (int(m.group(3)) * 1000 if m.group(3) else 0)
+        return _quantidade(m.group(1)) * 1_000_000 + extra
 
-    # 2 mil / 2.5 mil / 2,5 mil
-    m = re.search(r"\br?\$?\s*([\d.,]+)\s*mil\b", t)
+    # 2 mil / 2.5 mil / 2,5 mil / dois mil / 2 mil e quinhentos / 2 mil e 500
+    m = re.search(rf"\br?\$?\s*{_QTD}\s*mil\b{_RESTO_MIL}", t)
 
     if m:
-        return _numero_para_float(m.group(1)) * 1000
+        return _quantidade(m.group(1)) * 1000 + _centena(m.group(2))
+
+    # mil e quinhentos
+    m = re.search(rf"(?<![\w.,])mil{_RESTO_MIL}\b", t)
+
+    if m and m.group(1):
+        return 1000 + _centena(m.group(1))
 
     # R$ 2000 / R$ 2.000
     m = re.search(r"\br\$\s*([\d.,]+)\b", t)
@@ -374,7 +438,7 @@ def _extrair_preco_explicito(texto: str) -> float | None:
     # até 2000 / orçamento 2000 / valor 2000 / teto 2000
     m = re.search(
         r"(?:ate|no maximo|maximo|orcamento|valor|preco|teto|pago|pagar|ticket)"
-        r"(?:\s+de)?\s*[:\-]?\s*r?\$?\s*([\d.,]+)\b",
+        r"(?:\s+de)?(?:\s+(?:uns|umas|uns\s+de|cerca\s+de|tipo))?\s*[:\-]?\s*r?\$?\s*(\d[\d.,]*)\b",
         t,
     )
 
@@ -423,7 +487,12 @@ def _extrair_urgencia(texto: str) -> str | None:
     ):
         return "media"
 
-    if t in {"curto", "alta"}:
+    meses = re.search(r"\b(\d+)\s*mes(?:es)?\b", t)
+    if meses:
+        n = int(meses.group(1))
+        return "alta" if n <= 3 else "media" if n <= 12 else "baixa"
+
+    if re.search(r"\bo mais rapido\b", t) or t.strip(" !.") in {"curto", "alta", "logo", "rapido", "ja", "logo logo"}:
         return "alta"
 
     if t in {"medio", "media"}:
@@ -439,31 +508,15 @@ def _extrair_investimento(texto: str) -> dict[str, Any]:
     t = normalizar_texto(texto)
     dados: dict[str, Any] = {}
 
-    m = re.search(r"\b(\d+(?:[.,]\d+)?)\s*%", t)
+    m = re.search(r"\b(\d+(?:[.,]\d+)?)\s*(?:%|por\s*cento\b|ao\s*ano\b|a\.?a\.?(?!\w))", t)
 
     if m:
         dados["retorno_esperado"] = m.group(1).replace(",", ".") + "% a.a."
 
-    if any(
-        x in t
-        for x in (
-            "renda recorrente",
-            "renda mensal",
-            "renda de aluguel",
-            "locacao",
-            "aluguel",
-        )
-    ):
+    if re.search(r"\brenda\b|\blocacao\b|\baluguel\b|\balugar\b", t):
         dados["perfil"] = "renda recorrente"
 
-    elif any(
-        x in t
-        for x in (
-            "valorizacao",
-            "valorizar",
-            "ganho de capital",
-        )
-    ):
+    elif re.search(r"\bvaloriza|\bganho de capital\b|\brevender\b|\brevenda\b", t):
         dados["perfil"] = "valorização"
 
     return dados
@@ -519,7 +572,8 @@ def extrair_dados_deterministicos(
     t = normalizar_texto(texto)
     dados: dict[str, Any] = {}
 
-    intencao = _detectar_intencao(texto)
+    # Com a intenção já definida, só troca por aproximação ("alugr") quando o lead está corrigindo.
+    intencao = _detectar_intencao(texto, aproximada=not perfil.get("intencao") or parece_correcao(texto))
 
     if intencao:
         dados["intencao"] = intencao
@@ -532,6 +586,11 @@ def extrair_dados_deterministicos(
 
         if len(regioes) > 1:
             dados["regioes"] = regioes
+
+    elif _OUTRA_REGIAO.search(t):
+        # "pode olhar em outra região": libera o filtro, não é nome de bairro.
+        dados["regiao"] = None
+        dados["regiao_flexivel"] = True
 
     tipo = _detectar_tipo_imovel(texto)
 
@@ -562,7 +621,13 @@ def extrair_dados_deterministicos(
     if urgencia:
         dados["urgencia"] = urgencia
 
-    dados.update(_extrair_investimento(texto))
+    investimento = _extrair_investimento(texto)
+
+    # "quero alugar" de um inquilino não é foco de investidor.
+    if (dados.get("intencao") or perfil.get("intencao")) != "investimento":
+        investimento.pop("perfil", None)
+
+    dados.update(investimento)
 
     # "não tenho preferência", "não sei", "tanto faz" responde o campo atual
     # sem fazer o agente perguntar eternamente.
@@ -620,6 +685,13 @@ def extrair_dados_deterministicos(
     return dados
 
 
+# Cidade inteira não filtra nada no catálogo: não vira região.
+_CIDADES = {
+    "sao paulo", "sp", "sampa", "brasilia", "df", "distrito federal",
+    "rio de janeiro", "rio", "rj", "cidade", "capital",
+}
+
+
 def _sanitizar_dados_llm(raw: Any) -> dict[str, Any]:
     if not isinstance(raw, dict):
         return {}
@@ -641,7 +713,15 @@ def _sanitizar_dados_llm(raw: Any) -> dict[str, Any]:
     if isinstance(regiao, str) and regiao.strip():
         # Primeiro tenta normalizar para uma região conhecida.
         detectadas = _detectar_regioes(regiao)
-        out["regiao"] = detectadas[0] if detectadas else normalizar_texto(regiao)
+        if detectadas:
+            out["regiao"] = detectadas[0]
+        elif (
+            not _OUTRA_REGIAO.search(normalizar_texto(regiao))
+            and normalizar_texto(regiao) not in {"outra", "outro", "qualquer", "diferente", "tanto faz"}
+            and normalizar_texto(regiao) not in _CIDADES
+            and "," not in regiao
+        ):
+            out["regiao"] = normalizar_texto(regiao)
 
     tipo = dados.get("tipo_imovel")
 
@@ -664,11 +744,18 @@ def _sanitizar_dados_llm(raw: Any) -> dict[str, Any]:
     if urgencia in {"alta", "media", "baixa", "indefinida"}:
         out["urgencia"] = urgencia
 
-    for campo in ("retorno_esperado", "perfil"):
-        valor = dados.get(campo)
+    retorno = dados.get("retorno_esperado")
 
-        if isinstance(valor, str) and valor.strip():
-            out[campo] = valor.strip()
+    if isinstance(retorno, str) and re.search(r"\d", retorno):
+        out["retorno_esperado"] = retorno.strip()
+
+    # O LLM às vezes põe o nome ou a frase do lead aqui ("foco em Lucas"): só aceita objetivos de investimento.
+    perfil = dados.get("perfil")
+
+    if isinstance(perfil, str):
+        foco = _extrair_investimento(perfil).get("perfil")
+        if foco:
+            out["perfil"] = foco
 
     return out
 
@@ -773,6 +860,22 @@ def mensagem_fora_de_escopo(texto: str) -> bool:
     return any(normalizar_texto(x) in t for x in FORA_ESCOPO)
 
 
+# Campo já preenchido só muda via LLM se a mensagem falar dele; intenção só muda por regra local.
+_CITA_CAMPO = {
+    "intencao": None,
+    "quartos": re.compile(r"\d|quarto|dorm|suite|kitnet|kitinete|quitinete|studio|estudio|loft|conjugado"),
+    "faixa_preco": re.compile(r"\d|\bmil\b|milhao|milhoes|reais|r\$"),
+    "ticket": re.compile(r"\d|\bmil\b|milhao|milhoes|reais|r\$"),
+}
+
+
+def _campo_citado(campo: str, texto: str) -> bool:
+    if campo not in _CITA_CAMPO:
+        return True
+    padrao = _CITA_CAMPO[campo]
+    return bool(padrao and padrao.search(normalizar_texto(texto)))
+
+
 def interpretar_mensagem(
     texto: str,
     perfil: dict[str, Any],
@@ -814,7 +917,9 @@ def interpretar_mensagem(
                 # normalmente já são capturadas deterministicamente.
                 antigo = perfil.get(chave)
 
-                if antigo in (None, "") or correcao or llm.get("correcao"):
+                if antigo in (None, ""):
+                    dados[chave] = valor
+                elif (correcao or llm.get("correcao")) and _campo_citado(chave, texto):
                     dados[chave] = valor
 
         if categoria == "outro" and llm.get("categoria") in {

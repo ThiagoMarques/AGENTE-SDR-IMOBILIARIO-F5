@@ -28,6 +28,7 @@ def lead_para_estado(lead: Lead) -> dict[str, Any]:
         "criado_em": lead.criado_em.isoformat() if lead.criado_em else None,
         "atualizado_em": lead.atualizado_em.isoformat() if lead.atualizado_em else None,
         "perfil": dict(lead.perfil or {}),
+        "controle_sdr": dict(lead.controle or {}),
         "score": lead.score,
         "prioridade": lead.prioridade,
         "mensagens": [
@@ -87,6 +88,7 @@ def salvar(session: Session, estado: dict[str, Any]) -> str:
         session.add(lead)
 
     lead.perfil = perfil
+    lead.controle = dict(estado.get("controle_sdr") or {})
     lead.score = int(qual["score"])
     lead.prioridade = str(qual["prioridade"])
     lead.atualizado_em = datetime.now(timezone.utc)

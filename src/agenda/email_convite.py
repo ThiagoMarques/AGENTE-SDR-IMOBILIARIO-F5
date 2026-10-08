@@ -15,6 +15,7 @@ from typing import Any
 import requests
 
 import config
+from src.qualificacao.contato import vocativo
 
 RESEND_URL = "https://api.resend.com/emails"
 SENDGRID_URL = "https://api.sendgrid.com/v3/mail/send"
@@ -45,7 +46,7 @@ def montar(
     cancelado: bool = False,
 ) -> tuple[str, str, str]:
     """(assunto, html, texto) só com informação voltada ao cliente."""
-    saudacao = f"Olá, {nome.split()[0]}!" if nome else "Olá!"
+    saudacao = f"Olá, {vocativo(nome)}!" if nome else "Olá!"
     if cancelado:
         assunto = f"Cancelado: {titulo} ({quando})"
         texto = f"{saudacao}\n\nSua visita de {quando} foi cancelada. Quando quiser remarcar, é só responder no chat."
