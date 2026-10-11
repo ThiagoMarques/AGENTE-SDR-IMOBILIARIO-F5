@@ -25,7 +25,6 @@ Para melhorar o agente de forma contínua, o projeto tem um **treinador**: leads
 - [Limitações conhecidas](#limitações-conhecidas)
 - [Roadmap](#roadmap)
 - [Solução de problemas](#solução-de-problemas)
-- [Equipe](#equipe)
 
 ---
 
@@ -481,14 +480,6 @@ Rode uma única vez (troque `3.14` pela sua versão do Python):
 
 Ou abra **Aplicativos → Python 3.x** e dê dois cliques em **Install Certificates.command**.
 Depois, rode a demo de novo.
-
-## Equipe
-
-| Integrante | Contribuição |
-|---|---|
-| Thiago Marques | Estrutura do agente, conversa humanizada e guardrails, catálogo BR, API FastAPI, front React, PostgreSQL |
-| Letícia | Qualificação de leads, resumo para corretores, integração com CRM, testes |
-| Elisabete Xavier | Novo fluxo de conversa (o código conduz, o LLM interpreta), interpretador de mensagens tolerante a erros, lógica de respostas do agente |
 
 ---
 
