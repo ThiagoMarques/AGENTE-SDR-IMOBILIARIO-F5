@@ -14,6 +14,7 @@ Para melhorar o agente de forma contínua, o projeto tem um **treinador**: leads
 
 - [Problema de negócio](#problema-de-negócio)
 - [Funcionalidades](#funcionalidades)
+- [Telas](#telas)
 - [Arquitetura](#arquitetura)
 - [Como a IA é usada](#como-a-ia-é-usada)
 - [Estrutura do projeto](#estrutura-do-projeto)
@@ -66,7 +67,29 @@ O agente assume o primeiro atendimento e a qualificação. O corretor recebe só
 | Segurança | Credenciais só no `.env`, token Bearer no webhook do CRM, dados sintéticos |
 | Treinador do agente (avaliação contínua) | Leads simulados por LLM conversam com o agente; verificações automáticas e um LLM juiz com rubrica dão nota a cada conversa; as falhas viram casos de regressão no `pytest`. Tela própria no front (`/treinador`) e CLI (`python -m treinador`) |
 
+## Telas
+
+**Visão do lead** (`/atendimento`): só a conversa, os imóveis sugeridos e a visita; sem score nem dados internos.
+
+![Visão do lead](docs/img/visao_lead.png)
+
+**Inbox do corretor** (`/`): conversa, perfil extraído, score e a visita marcada com os links de agenda.
+
+![Inbox do corretor](docs/img/inbox_corretor.png)
+
+**Dashboard** (`/dashboard`): leads por prioridade, funil e captura de contato.
+
+![Dashboard](docs/img/dashboard.png)
+
+**Treinador** (`/treinador`): resultado de uma rodada e uma conversa com as falhas apontadas pelas verificações automáticas e pelo juiz.
+
+![Treinador: rodada](docs/img/treinador_rodada.png)
+
+![Treinador: conversa avaliada](docs/img/treinador_conversa.png)
+
 ## Arquitetura
+
+![Diagrama de arquitetura](docs/img/arquitetura.png)
 
 ```
 Frontend React (lead, inbox, dashboard, treinador) ──► API FastAPI (api/app.py) ──► processar_mensagem (src/agente/sdr.py)
