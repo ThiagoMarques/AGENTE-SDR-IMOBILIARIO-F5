@@ -4,95 +4,160 @@ Arquitetura — Agente SDR Imobiliário (POC Fase 5)
 Visão
 -----
 Prova de conceito de um SDR imobiliário com IA generativa. O agente atende
-leads, qualifica intenção (compra / aluguel / investimento), consulta imóveis
-em uma API fake pública, agenda reuniões e gera resumo para o corretor
-(human-in-the-loop).
+leads, qualifica intenção (compra / aluguel / investimento), consulta um
+catálogo simulado de imóveis, agenda visitas e gera resumo para o corretor
+(human-in-the-loop). Um treinador externo simula leads, avalia as conversas
+e transforma as falhas em testes de regressão.
 
 Stack
 -----
-- Front: Vite + React + TypeScript (Chat + Dashboard)
-- API: FastAPI (Python) em api/app.py
+- Front: Vite + React + TypeScript + HeroUI (visão do lead, inbox, dashboard, treinador)
+- API: FastAPI (Python) em api/app.py e api/treinador.py
 - Banco: PostgreSQL (Docker Compose) via SQLAlchemy
-- Imóveis: Fake Real Estate API (externa)
-- CLI: main.py (cenários do enunciado)
+- Imóveis: catálogo sintético BR (padrão) ou Fake Real Estate API
+- LLM: OpenAI gpt-4o-mini (opcional)
+- CLI: main.py (cenários do enunciado) e python -m treinador
+
+Princípio central
+-----------------
+O código controla a conversa; o LLM só interpreta.
+- A cada mensagem, o perfil é atualizado e o próximo dado faltante é
+  recalculado (src/qualificacao/fluxo_conversa.py). A ordem das respostas
+  do lead não importa.
+- A interpretação (src/qualificacao/interpretador.py) usa regras tolerantes
+  a erro de digitação, números por extenso e correções. Se houver
+  OPENAI_API_KEY, o LLM devolve só dados estruturados (JSON), que passam
+  por validação: ele preenche campos vazios e só altera um dado já
+  informado quando a mensagem cita esse dado. A intenção nunca é trocada
+  pelo LLM.
+- A resposta ao lead é montada pelo Python a partir do estado: confirma o
+  que mudou, responde dúvidas comuns e faz uma pergunta por vez.
 
 Fonte de imóveis
 ----------------
 Padrão (IMOVEIS_SOURCE=br): catálogo sintético Brasil em BRL
   (src/imoveis/catalogo_br.py) — regiões SP/DF alinhadas ao agente.
+  Sem resultado exato, sugere opções próximas (vizinhança, ±1 quarto,
+  folga de preço) e explica o motivo; pistas de preço mínimo orientam
+  o ajuste da busca.
 Opcional (IMOVEIS_SOURCE=fake): Fake Real Estate API (EUA):
   https://fakeapifordevs.vercel.app/docs/realestate
-  GET /api/realestate/listings
 
 Guardrails do chat
 ------------------
 - Mensagens fora de escopo (clima, esportes, política etc.) não disparam
   busca de imóveis nem poluem o perfil; o agente redireciona ao funil.
-- Cards de imóveis só aparecem com intenção + filtro (quartos ou preço).
+- Dúvidas imobiliárias comuns (financiamento, ITBI, pet, condomínio) são
+  respondidas sem inventar dados; o resto fica para o corretor.
+- Sem dado novo depois de uma busca, o agente avança a conversa em vez de
+  repetir a mesma resposta.
 
 Componentes
 -----------
 1) frontend/
-   Chat do lead e dashboard do corretor (proxy /api -> :8000).
+   /atendimento  visão do lead (só conversa, imóveis e visita)
+   /             inbox do corretor (conversa + perfil + score)
+   /dashboard    leads por prioridade, contatos e convites
+   /treinador    rodadas do treinador, contextos de teste e casos
+   Proxy /api -> :8000.
 
 2) api/app.py
-   REST: /chat, /leads, /dashboard, /health, /webhooks/canal (stub).
+   REST: /chat, /leads, /leads/{id}/resumo, /leads/{id}/follow-up,
+   /leads/{id}/agendar, convite .ics, /dashboard, /health,
+   /webhooks/canal (stub).
 
-3) src/agente
-   Orquestra a conversa: extrai sinais, atualiza perfil, busca imóveis,
-   responde (LLM se houver OPENAI_API_KEY; senão fluxo determinístico).
+3) api/treinador.py
+   /treinador/config, /treinador/rodadas (iniciar, listar, status,
+   relatório), /treinador/contextos (CRUD), /treinador/casos.
+   Dispara o treinador como subprocesso e lê os arquivos da rodada.
 
-4) src/qualificacao
-   Score e prioridade (quente / morno / frio).
+4) src/agente/sdr.py
+   Orquestra a conversa: contato (nome, e-mail, horário), interpretação,
+   fluxo, busca, agenda, resumo e CRM.
 
-5) src/imoveis
-   Cliente HTTP da Fake Real Estate API + normalização.
+5) src/qualificacao
+   interpretador.py (regras + LLM opcional), fluxo_conversa.py (próximo
+   campo), contato.py (nome, e-mail, sim/não, vocativo), lead.py (score
+   quente / morno / frio).
 
-6) src/memoria + src/db
-   Persistência PostgreSQL (leads, mensagens, agendamentos, imoveis_sugeridos).
+6) src/imoveis
+   Catálogo BR sintético e cliente da Fake Real Estate API.
 
-7) src/agenda / src/resumo / src/dashboard
-   Horários, pacote do corretor e métricas.
+7) src/memoria + src/db
+   Persistência PostgreSQL (leads, mensagens, agendamentos,
+   imoveis_sugeridos).
 
-8) src/crm
+8) src/agenda
+   Horários livres, leitura da escolha em linguagem natural,
+   Google Calendar / Microsoft Graph, convite por e-mail (.ics).
+
+9) src/resumo / src/dashboard
+   Pacote do corretor (sinopse por LLM com fallback) e métricas.
+
+10) src/crm
    Webhook por evento (lead_atualizado, lead_qualificado, resumo_gerado)
    + CRM simulado em FastAPI (python main.py --crm-servidor, porta 8001).
    Detalhes em docs/QUALIFICACAO_E_RESUMO.md.
 
+11) treinador/
+   personas.py   10 leads simulados (descrição, objetivo, roteiro fixo)
+   contextos.py  leads descritos em texto livre (contextos.json, fora do Git)
+   simulador.py  conversa lead simulado (LLM ou roteiro) <-> agente
+   canal.py      local: mesmo processo, memória em RAM, sem agenda/CRM/e-mail
+                 api: POST /chat, grava no banco (leads TREINO-*)
+   verificacoes.py  falhas sem LLM: repetição, loop, cidades misturadas,
+                    texto quebrado, jargão, resposta vazia
+   avaliador.py  LLM juiz: compreensão, naturalidade, progresso,
+                 veracidade, dúvidas (1 a 5); aprovada = sem falha
+                 automática e média >= 3,5
+   regressao.py  conversas com falha automática viram
+                 tests/regressao/casos/*.json (rodados pelo pytest)
+   Saídas: treinador/saidas/<rodada>/ (status.json, conversas.json,
+   relatorio.md), fora do Git.
+
 Fluxo
 -----
-Lead (React) -> POST /chat -> memória/perfil (Postgres) -> qualificação
-            -> API de imóveis -> resposta (LLM ou regras)
-            -> dashboard / resumo para corretor
+Lead (React) -> POST /chat -> memória/perfil (Postgres) -> interpretação
+            -> fluxo (próximo campo) -> qualificação -> catálogo
+            -> resposta montada pelo código -> agenda / resumo / CRM
+            -> dashboard do corretor
+
+Corretor (React /treinador) -> POST /treinador/rodadas -> python -m treinador
+            -> lead simulado <-> agente -> verificações + juiz
+            -> status.json (consultado a cada 2 s) -> relatório e casos de regressão
 
 Subir a POC
 -----------
 1) docker compose up -d
 2) python -m venv .venv && source .venv/bin/activate
 3) pip install -r requirements.txt
-4) uvicorn api.app:app --reload --port 8000
-5) cd frontend && npm install && npm run dev
+4) python main.py --crm-servidor           (opcional, CRM simulado)
+5) uvicorn api.app:app --reload --port 8000
+6) cd frontend && npm install && npm run dev
    -> http://localhost:5173
 
 Variáveis (.env na raiz do projeto)
 ----------------------------------
 DATABASE_URL=postgresql+psycopg://sdr:sdr@localhost:5432/sdr
-OPENAI_API_KEY=           # opcional
+OPENAI_API_KEY=           # opcional (interpretação, resumo, treinador)
 LLM_MODEL=gpt-4o-mini
-IMOVEIS_API_BASE=https://fakeapifordevs.vercel.app/api/realestate
+IMOVEIS_SOURCE=br
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+(lista completa no README)
 
-Diferenciais previstos (roadmap)
---------------------------------
-- RAG sobre FAQs da imobiliária
-- Canal WhatsApp / Chatwoot (gancho em POST /webhooks/canal)
-- Multiagentes (qualificador, buscador, agendador)
-- Voice AI
-- CRM real (hoje: webhook + CRM simulado, ver src/crm)
-- Observabilidade e deploy em cloud
+Diferenciais
+------------
+Feitos: memória conversacional (Postgres), integração com CRM (webhook +
+CRM simulado), agenda (Google/Outlook/.ics), segurança básica, treinador
+com avaliação por LLM e regressão automática.
+Previstos: RAG sobre FAQs da imobiliária, canal WhatsApp / Chatwoot
+(gancho em POST /webhooks/canal), multiagentes, Voice AI, observabilidade
+e deploy em cloud.
 
 Segurança e privacidade (Fase 5)
 --------------------------------
 - Credenciais só em .env (não versionado)
-- Catálogo via API fake (dados sintéticos)
+- Catálogo com dados sintéticos
+- E-mail pedido com finalidade explicada (LGPD)
+- Treinador com leads fictícios, sem agenda/CRM/e-mail reais no modo local
 - Resumo para humano decidir; o agente não fecha contrato sozinho

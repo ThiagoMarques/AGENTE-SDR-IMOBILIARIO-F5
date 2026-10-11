@@ -4,6 +4,8 @@ Prova de conceito (POC) de um **SDR imobiliário com IA generativa**, desenvolvi
 
 O agente atende leads por um **chat web**, identifica se o cliente quer comprar, alugar ou investir e qualifica o lead com um score explicável. Ele também sugere imóveis de um catálogo simulado, faz follow-up, **agenda visitas pelo próprio chat (com integração ao Google Agenda e ao Outlook)**, gera um resumo para o corretor e sincroniza o lead com um CRM. O corretor acompanha tudo por um **dashboard**.
 
+Para melhorar o agente de forma contínua, o projeto tem um **treinador**: leads simulados por IA (personas prontas ou descritas em texto livre) conversam com o agente, um juiz com IA avalia cada conversa e as falhas encontradas viram testes de regressão. Tudo isso pode ser disparado e acompanhado por uma tela no próprio front.
+
 **Stack:** Python, FastAPI, PostgreSQL (Docker), React + Vite + TypeScript e OpenAI (opcional).
 
 ---
@@ -43,10 +45,10 @@ O agente assume o primeiro atendimento e a qualificação. O corretor recebe só
 
 | Objetivo do desafio | Status | Onde |
 |---|---|---|
-| Atender leads automaticamente | ✅ Chat web (React) e API REST | `frontend/`, `api/app.py`, `src/agente/sdr.py` |
-| Conversa humanizada | ✅ LLM (se configurado) ou respostas por regras, com guardrails para mensagens fora de escopo | `src/agente/sdr.py` |
-| Identificar intenção (compra, aluguel, investimento) | ✅ | `src/agente/sdr.py`, `src/qualificacao/extracao_llm.py` |
-| Coletar informações relevantes | ✅ Funil com uma pergunta por vez + extração estruturada com LLM | `src/coleta/perfil.py`, `src/qualificacao/extracao_llm.py` |
+| Atender leads automaticamente | ✅ Chat web (React) na visão do lead e na inbox do corretor, e API REST | `frontend/`, `api/app.py`, `src/agente/sdr.py` |
+| Conversa humanizada | ✅ Confirma o que entendeu e faz uma pergunta por vez; aceita dados fora de ordem, correções ("na verdade 3 quartos"), mudança de ideia, dúvidas no meio da conversa e mensagens fora de escopo | `src/agente/sdr.py` |
+| Identificar intenção (compra, aluguel, investimento) | ✅ Tolerante a erro de digitação ("alugr", "zuna sul") | `src/qualificacao/interpretador.py` |
+| Coletar informações relevantes | ✅ Motor de fluxo que recalcula o próximo dado faltante a cada mensagem + interpretação por regras com LLM opcional | `src/qualificacao/fluxo_conversa.py`, `src/qualificacao/interpretador.py` |
 | Qualificar clientes | ✅ Score ponderado 0–100 com justificativa | `src/qualificacao/lead.py` |
 | Follow-up automático | ✅ Retoma a conversa com contexto | `src/agente/sdr.py` (`follow_up`), `POST /leads/{id}/follow-up` |
 | Agendar reuniões ou visitas | ✅ O lead escolhe no chat ("amanhã às 10", "o segundo", "quinta 15h"); o agente registra, remarca, cancela e cria o evento no Google Agenda / Outlook do corretor | `src/agenda/`, `POST /leads/{id}/agendar` |
@@ -62,21 +64,30 @@ O agente assume o primeiro atendimento e a qualificação. O corretor recebe só
 | Integração com CRM | Webhook HTTP por evento + CRM simulado em FastAPI com painel web (`src/crm/`) |
 | Integração com agenda | Google Agenda (Calendar API) e Outlook (Microsoft Graph): evento na agenda do corretor, convite ao lead e consulta de horários ocupados. Sem credenciais, o lead recebe links "adicionar à agenda" e `.ics` (`src/agenda/`) |
 | Segurança | Credenciais só no `.env`, token Bearer no webhook do CRM, dados sintéticos |
+| Treinador do agente (avaliação contínua) | Leads simulados por LLM conversam com o agente; verificações automáticas e um LLM juiz com rubrica dão nota a cada conversa; as falhas viram casos de regressão no `pytest`. Tela própria no front (`/treinador`) e CLI (`python -m treinador`) |
 
 ## Arquitetura
 
 ```
-Frontend React (Chat + Dashboard) ──► API FastAPI (api/app.py) ──► processar_mensagem (src/agente/sdr.py)
+Frontend React (lead, inbox, dashboard, treinador) ──► API FastAPI (api/app.py) ──► processar_mensagem (src/agente/sdr.py)
                                                                       │
       ├─► Memória ............ histórico e perfil no PostgreSQL (src/memoria, src/db)
+      ├─► Contato ............ nome, e-mail e escolha de horário (src/qualificacao/contato.py)
+      ├─► Interpretação ...... regras tolerantes a erro + LLM opcional que só devolve dados estruturados
+      ├─► Fluxo .............. próximo dado faltante, recalculado a cada mensagem (fluxo_conversa.py)
       ├─► Guardrails ......... fora de escopo não polui o perfil nem busca imóveis
-      ├─► Extração ........... regras (regex) + LLM com schema Pydantic
       ├─► Qualificação ....... score ponderado, prioridade, encaminhamento
       ├─► Catálogo ........... catálogo BR sintético ou Fake Real Estate API (src/imoveis)
-      ├─► Resposta ........... LLM (OpenAI) ou fluxo determinístico
+      ├─► Resposta ........... montada pelo Python a partir do estado (sem texto livre do LLM)
       ├─► Agenda ............. horários livres, leitura da escolha, Google Agenda / Outlook (src/agenda)
       ├─► Resumo ............. pacote para o corretor (src/resumo)
       └─► CRM ................ webhook por evento ──► CRM simulado (FastAPI, :8001)
+
+Treinador (processo separado: python -m treinador, disparado pela tela /treinador via api/treinador.py)
+      ├─► Lead simulado ...... persona fixa ou contexto em texto livre (LLM) ou roteiro fixo (sem LLM)
+      ├─► Agente ............. o mesmo processar_mensagem, com memória em RAM e sem agenda/CRM/e-mail reais
+      ├─► Avaliação .......... verificações automáticas + LLM juiz com rubrica (5 critérios, nota 1–5)
+      └─► Saídas ............. treinador/saidas/<rodada>/ e casos de regressão em tests/regressao/casos/
 ```
 
 A CLI (`main.py`) usa o mesmo núcleo e serve para demonstrar os cenários do enunciado pelo terminal.
@@ -84,7 +95,9 @@ A CLI (`main.py`) usa o mesmo núcleo e serve para demonstrar os cenários do en
 **Princípios de arquitetura**
 
 - **Componentização:** front, API e núcleo são separados, e cada responsabilidade do núcleo fica num módulo em `src/` (agente, coleta, qualificação, catálogo, memória, agenda, resumo, CRM, dashboard).
+- **O código controla a conversa, o LLM só interpreta:** o estado da conversa e a próxima pergunta são decididos pelo Python. Isso evita que o modelo invente imóveis, pule etapas ou perca dados já informados.
 - **LLM opcional com fallback:** sem `OPENAI_API_KEY` ou com falha na API, tudo continua funcionando no modo por regras.
+- **Treinador desacoplado:** roda em outro processo, conversa com o agente pela mesma função (ou pelo `POST /chat`, no modo `api`) e nunca grava em agenda, CRM ou e-mail reais.
 - **Adapter para o CRM:** o agente depende de uma interface (`CRMAdapter`), não de um fornecedor. Trocar o CRM simulado por um real é só trocar a URL ou a implementação.
 - **Resiliência:** uma falha no CRM não interrompe o atendimento. Os eventos ficam numa fila local e podem ser reenviados.
 - **Adapter para a agenda:** Google e Outlook implementam a mesma interface (`criar`, `adicionar_convidados`, `cancelar`, `ocupados`). Se a API da agenda falhar, a visita continua registrada e os links/.ics continuam valendo.
@@ -95,11 +108,13 @@ Mais detalhes em [`docs/ARQUITETURA.txt`](docs/ARQUITETURA.txt) e [`docs/QUALIFI
 
 | Onde | Técnica | Por quê |
 |---|---|---|
-| Resposta ao lead | LLM (`gpt-4o-mini` por padrão) com prompt de SDR: cordial, uma pergunta por vez, sem inventar imóveis fora da lista | Conversa natural e humanizada |
-| Extração do perfil | LLM com saída JSON validada por **Pydantic**, `temperature=0`, instrução de não inventar dados | A regex não entende "uns 800k" ou "mudar antes das férias" |
-| Merge regras + LLM | O campo extraído pelo LLM tem precedência; o que ele não retornar é mantido | Corrige erros da regex sem apagar informação |
+| Interpretação da mensagem | Regras tolerantes a erro (comparação aproximada, números por extenso, correções) + LLM (`gpt-4o-mini` por padrão) com `temperature=0` e saída JSON, usado só para extrair dados | O modelo entende frases que as regras não cobrem, sem controlar a conversa |
+| Merge regras + LLM | As regras têm prioridade no que já entenderam. O LLM completa campos vazios e só altera um dado já informado se a mensagem citar aquele dado; a intenção nunca é trocada pelo LLM. Valores inválidos (nome no lugar do foco, cidade inteira como região) são descartados | Evita que um palpite do modelo apague o que o lead disse |
+| Resposta ao lead | Montada pelo Python a partir do estado: confirma o que mudou, responde dúvidas comuns e faz a próxima pergunta | Respostas consistentes e sem dados inventados |
 | Qualificação | Score **ponderado e explicável** (inspirado em BANT) | O corretor vê *por que* o lead é quente |
 | Resumo para o corretor | LLM gera sinopse, objeções e próximo passo (schema Pydantic); fallback por regras | Corretor entende o lead em 30 segundos |
+| Treinador: lead simulado | LLM interpreta uma persona (descrição + objetivo + jeito de falar) e conversa com o agente até o objetivo ou o limite de turnos | Testa o agente com conversas variadas, que ninguém escreveria à mão |
+| Treinador: juiz | LLM com rubrica (compreensão, naturalidade, progresso, veracidade, dúvidas) aponta falhas por turno e sugere a resposta certa | Mede a qualidade da conversa, não só se o código roda |
 
 ### Score de qualificação
 
@@ -122,17 +137,34 @@ Prioridade: **quente** ≥ 70 · **morno** ≥ 40 · **frio** < 40. **Sem orçam
 ├── docker-compose.yml          # PostgreSQL
 ├── requirements.txt
 ├── .env.example                # Modelo de variáveis de ambiente
-├── api/app.py                  # API REST (FastAPI) usada pelo front
-├── frontend/                   # React + Vite + TypeScript (Chat e Dashboard)
+├── api/
+│   ├── app.py                  # API REST (FastAPI) usada pelo front
+│   └── treinador.py            # Rotas /treinador/* (rodadas, contextos, casos)
+├── frontend/src/pages/         # React + Vite + TypeScript
+│   ├── LeadPage.tsx            # /atendimento: chat como o lead vê no site
+│   ├── ChatPage.tsx            # /: inbox do corretor (conversa + perfil + score)
+│   ├── DashboardPage.tsx       # /dashboard: leads por prioridade
+│   └── TreinadorPage.tsx       # /treinador: rodadas, contextos e casos de regressão
 ├── docs/
 │   ├── ARQUITETURA.txt
-│   └── QUALIFICACAO_E_RESUMO.md
+│   ├── QUALIFICACAO_E_RESUMO.md
+│   └── ROTEIRO_TESTES_TELA.md
+├── treinador/                  # Treinador do agente (python -m treinador)
+│   ├── personas.py             # 10 leads simulados com objetivo e roteiro
+│   ├── contextos.py            # Leads descritos em texto livre (salvos em contextos.json, fora do Git)
+│   ├── simulador.py            # Conversa lead simulado ⇄ agente
+│   ├── verificacoes.py         # Falhas detectáveis sem LLM (repetição, loop, jargão, texto quebrado…)
+│   ├── avaliador.py            # LLM juiz com rubrica
+│   ├── regressao.py            # Gera casos em tests/regressao/casos/
+│   └── execucao.py, relatorio.py, canal.py, llm.py
 ├── src/
 │   ├── agente/sdr.py           # Orquestração da conversa
-│   ├── coleta/perfil.py        # Funil: campos por intenção e próxima pergunta
+│   ├── coleta/perfil.py        # Campos por intenção e perguntas do funil
 │   ├── qualificacao/
+│   │   ├── interpretador.py    # Interpretação da mensagem (regras + LLM opcional)
+│   │   ├── fluxo_conversa.py   # Próximo dado faltante e pergunta correspondente
 │   │   ├── lead.py             # Score, prioridade, encaminhamento
-│   │   ├── extracao_llm.py     # Extração estruturada com LLM
+│   │   ├── extracao_llm.py     # Extração estruturada com LLM (legado, coberta por testes)
 │   │   └── contato.py          # Nome, correção de e-mail e respostas sim/não
 │   ├── imoveis/
 │   │   ├── catalogo.py         # Busca (escolhe a fonte pelo IMOVEIS_SOURCE)
@@ -150,6 +182,7 @@ Prioridade: **quente** ≥ 70 · **morno** ≥ 40 · **frio** < 40. **Sem orçam
 │   │   └── servidor_mock.py    # CRM simulado (FastAPI + painel)
 │   └── dashboard/metricas.py   # Métricas agregadas
 ├── tests/                      # pytest (sem internet, sem LLM e sem banco)
+│   └── regressao/              # Casos gerados pelo treinador
 └── dados/                      # Saídas geradas em runtime (fora do Git)
 ```
 
@@ -190,9 +223,16 @@ uvicorn api.app:app --reload --port 8000
 cd frontend && npm install && npm run dev
 ```
 
-Abra **http://localhost:5173**. No chat você conversa como lead; no dashboard, acompanha os leads como corretor. O front acessa a API pelo proxy `/api` do Vite.
+O front acessa a API pelo proxy `/api` do Vite. O seletor **Lead | Corretor** no topo alterna as visões:
 
-**Principais rotas da API:** `POST /chat`, `GET /leads`, `GET /leads/{id}`, `GET /leads/{id}/resumo`, `POST /leads/{id}/follow-up`, `POST /leads/{id}/agendar`, `GET /leads/{id}/agendamentos/{n}/convite.ics`, `GET /dashboard`, `GET /health`.
+| Tela | Endereço | Para quê |
+|---|---|---|
+| Visão do lead | http://localhost:5173/atendimento | Chat como no site da imobiliária: só conversa, imóveis e visita, sem score nem dados internos |
+| Inbox do corretor | http://localhost:5173/ | Conversa com qualquer lead, com perfil, score e resumo ao lado |
+| Dashboard | http://localhost:5173/dashboard | Leads por prioridade, contatos capturados e convites |
+| Treinador | http://localhost:5173/treinador | Rodadas de avaliação do agente (ver [Treinador do agente](#treinador-do-agente)) |
+
+**Principais rotas da API:** `POST /chat`, `GET /leads`, `GET /leads/{id}`, `GET /leads/{id}/resumo`, `POST /leads/{id}/follow-up`, `POST /leads/{id}/agendar`, `GET /leads/{id}/agendamentos/{n}/convite.ics`, `GET /dashboard`, `GET /health`. A documentação interativa fica em http://127.0.0.1:8000/docs.
 
 ### Agendamento de visitas (Google Agenda e Outlook)
 
@@ -250,6 +290,34 @@ python main.py --demo
 
 A demo roda três cenários: **compra** ("apartamento na zona sul"), **investimento** ("investir para renda") e **follow-up** (lead que parou de responder). Ela também gera o resumo do `LEAD-001` em `dados/saidas/`. Os leads aparecem no painel do CRM, ordenados por score.
 
+### Treinador do agente
+
+O treinador coloca leads simulados para conversar com o agente e avalia cada conversa. Ele serve para achar falhas que testes escritos à mão não pegam (por exemplo, um lead idoso que se confunde, ou alguém que muda de ideia três vezes).
+
+**Pela tela** (`/treinador`, com a API no ar):
+
+1. Escolha as personas: são 10 prontas (investidor direto, inquilina que digita errado, quem muda de ideia, quem só responde "sim", curioso com dúvidas, fora de escopo, monossilábico…).
+2. Opcionalmente, descreva um lead em **Contextos para teste**, por exemplo: "simule uma conversa de um senhor de idade que fala pausadamente e possui confusões e dúvidas". O contexto fica salvo e pode ser reusado.
+3. Defina quantas conversas por persona e o máximo de turnos, e se o lead e o juiz usam IA. Sem IA, as personas seguem roteiros fixos e só as verificações automáticas rodam: é rápido e não tem custo, mas os contextos exigem IA.
+4. Acompanhe o progresso ao vivo. No fim, a tela mostra as aprovadas, a média do juiz por critério e cada conversa em balões, com a falha marcada no turno e a sugestão do juiz.
+
+**Pelo terminal:**
+
+```bash
+python -m treinador --sem-llm                                   # roteiros fixos, sem custo
+python -m treinador --personas muda_de_ideia,curioso_duvidas    # com IA (precisa de OPENAI_API_KEY)
+python -m treinador --contexto "senhor de idade que fala pausadamente e tem dúvidas"
+python -m treinador --modo api --url http://localhost:8000      # conversa pelo POST /chat e grava no banco
+python -m treinador --limpar                                    # remove do banco os leads TREINO-*
+```
+
+**Como uma conversa é avaliada:** uma conversa é aprovada quando não tem falha automática e a média do juiz é pelo menos 3,5.
+
+- **Falhas automáticas** (sem LLM): resposta repetida, pergunta em loop, cidades misturadas na mesma sugestão, texto quebrado, jargão de sistema e resposta vazia.
+- **Juiz:** dá nota de 1 a 5 em compreensão, naturalidade, progresso, veracidade e dúvidas.
+
+**Regressão:** conversas com falha automática viram um caso em `tests/regressao/casos/`. O `pytest` repete as falas do lead e falha até o agente responder sem aquela falha. Cada rodada gera `treinador/saidas/<rodada>/` com status, conversas e um relatório em Markdown (fora do Git).
+
 ### Comandos da CLI
 
 | Comando | O que faz |
@@ -263,6 +331,7 @@ A demo roda três cenários: **compra** ("apartamento na zona sul"), **investime
 | `python main.py --crm-servidor [--crm-porta 8001]` | Sobe o CRM simulado |
 | `python main.py --crm-reenviar` | Reenvia eventos que falharam ao CRM |
 | `python main.py --agenda-auth google` / `outlook` | Conecta a agenda do corretor (autorização única) |
+| `python -m treinador [--personas a,b] [--contexto "…"] [--rodadas N] [--sem-llm]` | Roda o treinador do agente (ver acima) |
 
 ### Exemplo de resumo para o corretor
 
@@ -302,6 +371,8 @@ Os testes rodam **sem internet, sem LLM e sem banco**: o catálogo é simulado, 
 - **LLM simulado:** cliente OpenAI falso para validar parsing, validação Pydantic e fallback.
 - **Agenda:** leitura de horários em linguagem natural (sem falso positivo em "2 quartos" ou "900 mil"), horários livres, links Google/Outlook, `.ics` (RFC 5545), provedores Google/Microsoft com HTTP simulado, agendar/remarcar/cancelar pelo chat, contador do dashboard e rota `.ics`.
 - **Captura e convite:** extração de nome, correção de domínio do e-mail, "sim" de um toque, `.ics` REQUEST/CANCEL, envio pelo Resend e pelo SendGrid com HTTP simulado e ausência de convite duplicado quando a agenda do corretor já convidou.
+- **Fluxo de conversa:** erro de digitação, dados fora de ordem, mudança de ideia, correções, preço por extenso ("2 mil e quinhentos"), kitnet/studio, dúvidas no meio, pedido de visita antes da hora, adiar a agenda e insistência sem dado novo (nunca repetir a mesma resposta).
+- **Treinador:** personas e contextos, execução sem LLM, API da tela (`/treinador/*`) e os casos de regressão gerados pelas rodadas (`tests/regressao/`).
 - **Validação ponta a ponta:** 12 conversas realistas pelo fluxo completo. Os casos marcados como `xfail` são **defeitos conhecidos** da extração por regex (ver [Limitações conhecidas](#limitações-conhecidas)). Quando um deles for corrigido, o teste acusa XPASS, avisando para remover a marcação.
 
 ## Configuração (.env)
@@ -309,7 +380,7 @@ Os testes rodam **sem internet, sem LLM e sem banco**: o catálogo é simulado, 
 | Variável | Obrigatória | Padrão | Descrição |
 |---|---|---|---|
 | `DATABASE_URL` | Não | `postgresql+psycopg://sdr:sdr@localhost:5432/sdr` | Conexão com o PostgreSQL (igual ao `docker-compose.yml`) |
-| `OPENAI_API_KEY` | Não | — | Liga o LLM (resposta, extração e sinopse). Sem ela, o modo é por regras. |
+| `OPENAI_API_KEY` | Não | — | Liga o LLM (interpretação da mensagem, sinopse do resumo e, no treinador, lead simulado e juiz). Sem ela, o agente funciona por regras e o treinador só roda com `--sem-llm`. |
 | `LLM_MODEL` | Não | `gpt-4o-mini` | Modelo da OpenAI |
 | `IMOVEIS_SOURCE` | Não | `br` | `br` = catálogo sintético Brasil (BRL); `fake` = Fake Real Estate API (EUA) |
 | `IMOVEIS_API_BASE` | Não | Fake Real Estate API | Base da API externa (só com `IMOVEIS_SOURCE=fake`) |
@@ -339,18 +410,19 @@ Os testes rodam **sem internet, sem LLM e sem banco**: o catálogo é simulado, 
 - O evento enviado ao lead não leva score nem prioridade: só os dados que ele mesmo informou.
 - O e-mail só é pedido com a finalidade explicada ao lead (convite e contato do corretor), e o convite traz um aviso de por que ele foi enviado (LGPD).
 - O agente **não fecha negócio sozinho**: ele qualifica e resume, e a decisão é do corretor.
+- O treinador usa leads fictícios e, no modo padrão, memória em RAM: não cria eventos na agenda, não envia e-mail nem dispara o CRM. Os contextos de teste e as saídas das rodadas ficam fora do Git.
 
 ## Limitações conhecidas
 
-- **Extração por regex** (usada quando não há LLM ou ele falha) erra em alguns formatos:
+- **A interpretação por regras** (usada sempre, com o LLM só complementando) ainda erra em alguns formatos:
   - "800k" não é reconhecido;
-  - "dois quartos" (por extenso) não é lido;
-  - bairros fora da lista fixa são ignorados;
-  - prazos como "esse mês" e "em 3 meses" não viram urgência;
-  - "agora estou só olhando" marca urgência alta;
-  - "minha renda é…" junto com "alugar" vira investimento.
+  - quartos por extenso ("dois quartos", "um ou dois quartos") não são lidos;
+  - bairros fora da lista fixa (ex.: Mooca) são ignorados, e referências como "perto do Ibirapuera" não viram um bairro atendido;
+  - "agora" no meio da frase ("agora estou só olhando", "espero que tenha entendido agora") marca urgência alta.
 
-  Todos estão documentados em `tests/test_validacao_qualificacao.py`. Com o LLM ligado, a extração dele tem precedência e corrige boa parte desses casos.
+  Os casos com teste estão marcados como `xfail` em `tests/test_validacao_qualificacao.py`: quando um for corrigido, o teste acusa XPASS. Com o LLM ligado, parte deles é coberta pela interpretação do modelo.
+- **Lead que não sabe o bairro:** quando o lead pede sugestão de região, o agente ainda não lista as regiões atendidas e responde que deixa a pergunta para o corretor.
+- **Treinador:** o juiz é um LLM (`gpt-4o-mini`) e às vezes erra; o prompt foi calibrado, mas as notas são indicativas. Só as falhas automáticas viram teste de regressão, e roda uma rodada por vez.
 - **Com `IMOVEIS_SOURCE=fake`, uma falha na API externa interrompe a conversa.** O catálogo BR (padrão) é local e não tem esse risco.
 - **O CRM é simulado.** A integração (HTTP, token, eventos) é real, mas o destino é um servidor local.
 - **Agenda:** sem credenciais, os horários oferecidos são janelas padrão (10h, 14h e 16h, sem domingo) e não há checagem de conflito. A agenda é de um único corretor, sem rodízio entre corretores.
