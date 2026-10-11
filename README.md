@@ -2,7 +2,7 @@
 
 Prova de conceito (POC) de um **SDR imobiliário com IA generativa**, desenvolvida no Hackathon da Fase 5 da pós-graduação **IA para Devs (FIAP PosTech)**.
 
-O agente atende leads por um **chat web**, identifica se o cliente quer comprar, alugar ou investir e qualifica o lead com um score explicável. Ele também sugere imóveis de um catálogo simulado, faz follow-up, **agenda visitas pelo próprio chat (com integração ao Google Agenda e ao Outlook)**, gera um resumo para o corretor e sincroniza o lead com um CRM. O corretor acompanha tudo por um **dashboard**.
+O agente atende leads por um **chat web** (e, como demonstração educativa, por um bot do Telegram), identifica se o cliente quer comprar, alugar ou investir e qualifica o lead com um score explicável. Ele também sugere imóveis de um catálogo simulado, faz follow-up, **agenda visitas pelo próprio chat (com integração ao Google Agenda e ao Outlook)**, gera um resumo para o corretor e sincroniza o lead com um CRM. O corretor acompanha tudo por um **dashboard**.
 
 Para melhorar o agente de forma contínua, o projeto tem um **treinador**: leads simulados por IA (personas prontas ou descritas em texto livre) conversam com o agente, um juiz com IA avalia cada conversa e as falhas encontradas viram testes de regressão. Tudo isso pode ser disparado e acompanhado por uma tela no próprio front.
 
@@ -64,6 +64,7 @@ O agente assume o primeiro atendimento e a qualificação. O corretor recebe só
 | Integração com CRM | Webhook HTTP por evento + CRM simulado em FastAPI com painel web (`src/crm/`) |
 | Integração com agenda | Google Agenda (Calendar API) e Outlook (Microsoft Graph): evento na agenda do corretor, convite ao lead e consulta de horários ocupados. Sem credenciais, o lead recebe links "adicionar à agenda" e `.ics` (`src/agenda/`) |
 | Segurança | Credenciais só no `.env`, token Bearer no webhook do CRM, dados sintéticos |
+| Canal de mensagem (demonstração educativa) | Bot do Telegram que leva o lead ao mesmo agente do chat web, com horários em botões e convite `.ics` no chat. O WhatsApp entra pelo mesmo caminho (ver [Canal Telegram](#canal-telegram-demonstração-educativa)) |
 | Treinador do agente (avaliação contínua) | Leads simulados por LLM conversam com o agente; verificações automáticas e um LLM juiz com rubrica dão nota a cada conversa; as falhas viram casos de regressão no `pytest`. Tela própria no front (`/treinador`) e CLI (`python -m treinador`) |
 
 ## Arquitetura
@@ -178,6 +179,7 @@ Prioridade: **quente** ≥ 70 · **morno** ≥ 40 · **frio** < 40. **Sem orçam
 │   │   ├── calendario.py       # Links Google/Outlook, .ics, Google Calendar API, Microsoft Graph
 │   │   ├── email_convite.py    # Convite por e-mail (Resend/SendGrid) com .ics de RSVP
 │   │   └── oauth.py            # Autorização única (--agenda-auth google|outlook)
+│   ├── canais/telegram.py      # Bot do Telegram (demonstração educativa; mesmo agente do chat web)
 │   ├── resumo/corretor.py      # Resumo para o corretor (.md e .json)
 │   ├── crm/
 │   │   ├── cliente.py          # Webhook, eventos, fila de pendentes
@@ -282,6 +284,24 @@ O convite chega por um destes caminhos, sem duplicar:
 
 O dashboard mostra quantos leads deixaram nome e e-mail e quantos convites foram enviados.
 
+### Canal Telegram (demonstração educativa)
+
+Para fins educativos, o agente também atende por um bot do Telegram. O objetivo é mostrar que ele não depende do canal: cada mensagem do bot passa pela mesma função do chat web (`processar_mensagem`), e o lead aparece na inbox e no dashboard do corretor como `TG-<id do chat>`.
+
+1. No Telegram, abra o [@BotFather](https://t.me/BotFather), envie `/newbot` e copie o token.
+2. Preencha `TELEGRAM_BOT_TOKEN` no `.env`.
+3. Com o PostgreSQL no ar, rode `python main.py --telegram` e converse com o bot.
+
+O bot busca as mensagens por *long polling*, então roda na máquina local, sem URL pública. Os horários de visita viram botões, e a visita marcada chega com os atalhos do Google Agenda e do Outlook e o arquivo `.ics`. No `/start`, o bot avisa que é uma demonstração e que os imóveis são fictícios.
+
+**E o WhatsApp?** É possível integrar pelo mesmo caminho: muda só o formato da mensagem recebida e a chamada de envio, e o agente continua igual. As opções são a [WhatsApp Cloud API](https://developers.facebook.com/docs/whatsapp/cloud-api) da Meta (oficial, com número de teste gratuito) ou o Twilio. O WhatsApp tem regras que o Telegram não tem:
+
+- o agente só manda texto livre até 24 h depois da última mensagem do lead, e o follow-up fora dessa janela exige um modelo de mensagem aprovado pela Meta;
+- o número de produção exige verificação da empresa na Meta;
+- o webhook precisa de URL pública com HTTPS e validação da assinatura de cada requisição.
+
+Bibliotecas não oficiais (que simulam o WhatsApp Web) violam os termos de uso e podem levar ao banimento do número.
+
 ### Demonstração pela CLI (3 cenários do desafio)
 
 Com o PostgreSQL e o CRM simulado no ar:
@@ -333,6 +353,7 @@ python -m treinador --limpar                                    # remove do banc
 | `python main.py --crm-servidor [--crm-porta 8001]` | Sobe o CRM simulado |
 | `python main.py --crm-reenviar` | Reenvia eventos que falharam ao CRM |
 | `python main.py --agenda-auth google` / `outlook` | Conecta a agenda do corretor (autorização única) |
+| `python main.py --telegram` | Atende leads pelo bot do Telegram (demonstração educativa) |
 | `python -m treinador [--personas a,b] [--contexto "…"] [--rodadas N] [--sem-llm]` | Roda o treinador do agente (ver acima) |
 
 ### Exemplo de resumo para o corretor
@@ -374,6 +395,7 @@ Os testes rodam **sem internet, sem LLM e sem banco**: o catálogo é simulado, 
 - **Agenda:** leitura de horários em linguagem natural (sem falso positivo em "2 quartos" ou "900 mil"), horários livres, links Google/Outlook, `.ics` (RFC 5545), provedores Google/Microsoft com HTTP simulado, agendar/remarcar/cancelar pelo chat, contador do dashboard e rota `.ics`.
 - **Captura e convite:** extração de nome, correção de domínio do e-mail, "sim" de um toque, `.ics` REQUEST/CANCEL, envio pelo Resend e pelo SendGrid com HTTP simulado e ausência de convite duplicado quando a agenda do corretor já convidou.
 - **Fluxo de conversa:** erro de digitação, dados fora de ordem, mudança de ideia, correções, preço por extenso ("2 mil e quinhentos"), kitnet/studio, dúvidas no meio, pedido de visita antes da hora, adiar a agenda e insistência sem dado novo (nunca repetir a mesma resposta).
+- **Canal Telegram:** bot falso, sem rede: mensagem vira lead `TG-*`, horários em botões, clique que agenda, `.ics` enviado uma vez, grupos ignorados, texto longo dividido e token fora das mensagens de erro.
 - **Treinador:** personas e contextos, execução sem LLM, API da tela (`/treinador/*`) e os casos de regressão gerados pelas rodadas (`tests/regressao/`).
 - **Validação ponta a ponta:** 12 conversas realistas pelo fluxo completo. Os casos marcados como `xfail` são **defeitos conhecidos** da extração por regex (ver [Limitações conhecidas](#limitações-conhecidas)). Quando um deles for corrigido, o teste acusa XPASS, avisando para remover a marcação.
 
@@ -401,6 +423,7 @@ Os testes rodam **sem internet, sem LLM e sem banco**: o catálogo é simulado, 
 | `EMAIL_PROVIDER` | Não | automático | `resend` ou `sendgrid`; vazio usa o que tiver chave |
 | `EMAIL_FROM` | Não | — | Remetente do convite, ex.: `Imobiliária <visitas@seudominio.com.br>` |
 | `RESEND_API_KEY` / `SENDGRID_API_KEY` | Não | — | Chave do serviço de e-mail transacional. Sem chave, o envio fica desligado |
+| `TELEGRAM_BOT_TOKEN` | Não | — | Token do bot criado no @BotFather (só para `python main.py --telegram`) |
 
 ## Segurança e privacidade
 
@@ -428,12 +451,12 @@ Os testes rodam **sem internet, sem LLM e sem banco**: o catálogo é simulado, 
 - **Com `IMOVEIS_SOURCE=fake`, uma falha na API externa interrompe a conversa.** O catálogo BR (padrão) é local e não tem esse risco.
 - **O CRM é simulado.** A integração (HTTP, token, eventos) é real, mas o destino é um servidor local.
 - **Agenda:** sem credenciais, os horários oferecidos são janelas padrão (10h, 14h e 16h, sem domingo) e não há checagem de conflito. A agenda é de um único corretor, sem rodízio entre corretores.
-- **O webhook de canal (`POST /webhooks/canal`) é um stub**, ou seja, um gancho preparado para WhatsApp/Chatwoot, sem integração ativa.
+- **Canais:** o Telegram é uma demonstração educativa, rodando por *long polling* num único processo. O WhatsApp não está integrado. O webhook de canal (`POST /webhooks/canal`) é um gancho genérico, sem o formato de nenhum provedor.
 
 ## Roadmap
 
 - RAG sobre FAQs da imobiliária
-- Canal WhatsApp / Chatwoot (gancho em `POST /webhooks/canal`)
+- Canal WhatsApp (Cloud API da Meta ou Twilio) ou Chatwoot, no mesmo molde do canal Telegram
 - Multiagentes (qualificador, buscador, agendador)
 - Voice AI
 - CRM real (ex.: HubSpot, via novo adapter)

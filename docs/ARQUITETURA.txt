@@ -17,6 +17,7 @@ Stack
 - Imóveis: catálogo sintético BR (padrão) ou Fake Real Estate API
 - LLM: OpenAI gpt-4o-mini (opcional)
 - CLI: main.py (cenários do enunciado) e python -m treinador
+- Canal extra: bot do Telegram (python main.py --telegram), demonstração educativa
 
 Princípio central
 -----------------
@@ -99,7 +100,17 @@ Componentes
    + CRM simulado em FastAPI (python main.py --crm-servidor, porta 8001).
    Detalhes em docs/QUALIFICACAO_E_RESUMO.md.
 
-11) treinador/
+11) src/canais/telegram.py  (demonstração com fins educativos)
+   Bot do Telegram por long polling (getUpdates), sem URL pública. Cada
+   mensagem vira processar_mensagem("TG-<chat_id>", texto), a mesma função
+   do chat web; o lead aparece na inbox e no dashboard. Horários viram
+   botões; a visita marcada segue com atalhos Google/Outlook e o .ics.
+   WhatsApp: mesmo molde, trocando a entrada (webhook da Cloud API da Meta
+   ou do Twilio) e o envio. Exige HTTPS público, assinatura validada,
+   verificação da empresa e respeito à janela de 24 h (follow-up fora
+   dela só com modelo de mensagem aprovado).
+
+12) treinador/
    personas.py   10 leads simulados (descrição, objetivo, roteiro fixo)
    contextos.py  leads descritos em texto livre (contextos.json, fora do Git)
    simulador.py  conversa lead simulado (LLM ou roteiro) <-> agente
@@ -117,7 +128,7 @@ Componentes
 
 Fluxo
 -----
-Lead (React) -> POST /chat -> memória/perfil (Postgres) -> interpretação
+Lead (React -> POST /chat, ou bot do Telegram) -> memória/perfil (Postgres) -> interpretação
             -> fluxo (próximo campo) -> qualificação -> catálogo
             -> resposta montada pelo código -> agenda / resumo / CRM
             -> dashboard do corretor
@@ -149,9 +160,10 @@ Diferenciais
 ------------
 Feitos: memória conversacional (Postgres), integração com CRM (webhook +
 CRM simulado), agenda (Google/Outlook/.ics), segurança básica, treinador
-com avaliação por LLM e regressão automática.
+com avaliação por LLM e regressão automática, canal Telegram
+(demonstração educativa).
 Previstos: RAG sobre FAQs da imobiliária, canal WhatsApp / Chatwoot
-(gancho em POST /webhooks/canal), multiagentes, Voice AI, observabilidade
+(mesmo molde do Telegram), multiagentes, Voice AI, observabilidade
 e deploy em cloud.
 
 Segurança e privacidade (Fase 5)
@@ -160,4 +172,6 @@ Segurança e privacidade (Fase 5)
 - Catálogo com dados sintéticos
 - E-mail pedido com finalidade explicada (LGPD)
 - Treinador com leads fictícios, sem agenda/CRM/e-mail reais no modo local
+- Bot do Telegram avisa no /start que é demonstração; token só no .env e
+  nunca impresso em log
 - Resumo para humano decidir; o agente não fecha contrato sozinho

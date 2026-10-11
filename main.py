@@ -178,6 +178,15 @@ def cmd_crm_reenviar() -> None:
     print(json.dumps(reenviar_pendentes(), ensure_ascii=False))
 
 
+def cmd_telegram() -> None:
+    from src.canais.telegram import rodar
+
+    try:
+        rodar()
+    except KeyboardInterrupt:
+        print("\nBot do Telegram parado.")
+
+
 def cmd_agenda_auth(provedor: str) -> None:
     from src.agenda.calendario import ErroAgenda
     from src.agenda.oauth import autorizar_google, autorizar_outlook
@@ -204,6 +213,11 @@ def main() -> None:
     parser.add_argument("--crm-porta", type=int, default=8001)
     parser.add_argument("--crm-reenviar", action="store_true", help="Reenvia eventos pendentes ao CRM")
     parser.add_argument(
+        "--telegram",
+        action="store_true",
+        help="Atende leads por um bot do Telegram (demonstração educativa)",
+    )
+    parser.add_argument(
         "--agenda-auth",
         choices=["google", "outlook"],
         help="Conecta a agenda do corretor (Google Agenda ou Outlook)",
@@ -223,6 +237,9 @@ def main() -> None:
         return
     if args.agenda_auth:
         cmd_agenda_auth(args.agenda_auth)
+        return
+    if args.telegram:
+        cmd_telegram()
         return
     if args.checar:
         checar_ambiente()

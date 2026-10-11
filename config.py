@@ -74,3 +74,7 @@ EMAIL_FROM = (os.getenv("EMAIL_FROM") or "").strip()
 RESEND_API_KEY = (os.getenv("RESEND_API_KEY") or "").strip()
 SENDGRID_API_KEY = (os.getenv("SENDGRID_API_KEY") or "").strip()
 
+# Canal Telegram (demonstração educativa): token do bot criado no @BotFather.
+# Rode: python main.py --telegram
+TELEGRAM_BOT_TOKEN = (os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
+
