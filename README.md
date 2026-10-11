@@ -488,8 +488,7 @@ Depois, rode a demo de novo.
 |---|---|
 | Thiago Marques | Estrutura do agente, conversa humanizada e guardrails, catálogo BR, API FastAPI, front React, PostgreSQL |
 | Letícia | Qualificação de leads, resumo para corretores, integração com CRM, testes |
-
-<!-- Completar com os demais integrantes e suas contribuições. -->
+| Elisabete Xavier | Novo fluxo de conversa (o código conduz, o LLM interpreta), interpretador de mensagens tolerante a erros, lógica de respostas do agente |
 
 ---
 
