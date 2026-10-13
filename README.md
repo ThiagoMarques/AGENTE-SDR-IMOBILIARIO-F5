@@ -1,5 +1,7 @@
 # Agente SDR Imobiliário com IA — Fase 5
 
+> 🎥 **Vídeo de apresentação:** [youtu.be/dOUEhKO0qsg](https://youtu.be/dOUEhKO0qsg)
+
 Prova de conceito (POC) de um **SDR imobiliário com IA generativa**, desenvolvida no Hackathon da Fase 5 da pós-graduação **IA para Devs (FIAP PosTech)**.
 
 O agente atende leads por um **chat web** (e, como demonstração educativa, por um bot do Telegram), identifica se o cliente quer comprar, alugar ou investir e qualifica o lead com um score explicável. Ele também sugere imóveis de um catálogo simulado, faz follow-up, **agenda visitas pelo próprio chat (com integração ao Google Agenda e ao Outlook)**, gera um resumo para o corretor e sincroniza o lead com um CRM. O corretor acompanha tudo por um **dashboard**.
